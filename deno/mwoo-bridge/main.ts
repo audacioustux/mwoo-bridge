@@ -140,6 +140,14 @@ if (import.meta.main) {
     },
   );
   console.info("total courses found:", totalCourses);
+  // get course outline
+  moo.core.course.getContents({
+    courseid: courses[5].id,
+  }).then(
+    (response: unknown) => {
+      console.log(response);
+    },
+  );
 
   const courseQueue = courses.slice();
   const concurrency = 10;
@@ -166,15 +174,17 @@ if (import.meta.main) {
           },
         );
 
+        const name = R.trim(course.fullname);
+        const short_description = canonicalizeHTML(course.summary);
         const image = await syncMedia(
           course.courseimage,
-          R.trim(course.fullname),
+          name,
           course.shortname,
-          canonicalizeHTML(course.summary),
+          short_description,
         );
         const commonFields: Partial<typeof product> = {
-          name: R.trim(course.fullname),
-          short_description: canonicalizeHTML(course.summary),
+          name,
+          short_description,
           images: image ? [{ id: image.id }] : [],
         };
 
