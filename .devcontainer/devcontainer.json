@@ -32,7 +32,10 @@
           "devbox.json": "jsonc"
         },
         "rust-analyzer.check.command": "clippy",
-        "rust-analyzer.checkOnSave": true
+        "rust-analyzer.checkOnSave": true,
+        "[typescript]": {
+          "editor.defaultFormatter": "denoland.vscode-deno"
+        }
       },
       "extensions": [
         "jetpack-io.devbox",
@@ -48,7 +51,8 @@
         "tamasfe.even-better-toml",
         "rust-lang.rust-analyzer",
         "sleistner.vscode-fileutils",
-        "DavidAnson.vscode-markdownlint"
+        "DavidAnson.vscode-markdownlint",
+        "denoland.vscode-deno"
       ]
     }
   },
