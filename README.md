@@ -1,6 +1,6 @@
-# Devtopia
+# MWoo Bridge
 
-A generic development environment for remote development.
+Moodle - WooCommerce Bridge, to sync users, courses, and enrollments between Moodle and WooCommerce.
 
 ## Developer Guide
 
@@ -14,7 +14,7 @@ Or, you may use the [GitHub Codespaces](https://github.com/codespaces) instead o
 
 ### Adding new dependencies to the development environment
 
-You may use `devbox add` command to add pkgs from `https://www.nixhub.io/`.  
+You may use `devbox add` command to add pkgs from `https://www.nixhub.io/`.
 Or, checkout `taskfiles/_env.yml` and make changes as needed.
 
 ### Running Containers
