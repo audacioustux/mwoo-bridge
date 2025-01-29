@@ -1,6 +1,11 @@
 import WooCommerceRestApi from "npm:@woocommerce/woocommerce-rest-api";
-import { MoodleApi } from "npm:@webhare/moodle-webservice";
-import { mooCourse, wooOrder, wooProduct } from "./schema.ts";
+import { IMoodleCategory, MoodleApi } from "npm:@webhare/moodle-webservice";
+import {
+  mooCourse,
+  wooOrder,
+  wooProduct,
+  wooProductCategory,
+} from "./schema.ts";
 import * as R from "npm:ramda";
 import z from "npm:zod";
 import { JSDOM } from "npm:jsdom";
@@ -43,6 +48,8 @@ const syncMedia = async (
     encoder.encode(sourceUrl),
   ).then(
     encodeHex,
+  ).then(
+    (digest) => `moo_${digest}`,
   );
 
   const params = new URLSearchParams();
@@ -107,6 +114,21 @@ const syncMedia = async (
   }
 };
 
+function decodeHtmlEntities(text: string): string {
+  const dom = new JSDOM(`<body>${text}</body>`);
+  return dom.window.document.body.textContent ?? "";
+}
+
+function slugify(text: string): string {
+  return R.pipe(
+    R.toLower,
+    R.trim,
+    R.replace(/[^a-z0-9\s-]/g, ""),
+    R.replace(/\s+/g, "-"),
+    R.replace(/-+/g, "-"),
+  )(text);
+}
+
 function canonicalizeHTML(html: string): string {
   const dom = new JSDOM(`<body>${html}</body>`);
   const bodyContent = dom.window.document.body.innerHTML;
@@ -126,7 +148,117 @@ function canonicalizeHTML(html: string): string {
   );
 }
 
+type IMoodleCategoryWithChildren = IMoodleCategory & {
+  children: IMoodleCategoryWithChildren[];
+};
+
+const buildMooCategoryTree = (
+  categories: IMoodleCategory[],
+  parentId = 0,
+): IMoodleCategoryWithChildren[] =>
+  categories
+    .filter((category) => category.parent === parentId)
+    .map((category) => ({
+      ...category,
+      children: buildMooCategoryTree(categories, category.id),
+    }));
+
 if (import.meta.main) {
+  const mooCategories = await moo.core.course.getCategories()
+    .then(
+      buildMooCategoryTree,
+    )
+    .catch(
+      (error: Error) => {
+        console.error("failed to get category:", error);
+        return [];
+      },
+    );
+  // console.log(JSON.stringify(mooCategories, null, 2));
+  const syncCategores = (
+    mooParentCategory: IMoodleCategoryWithChildren | null,
+    mooChildCategories: IMoodleCategoryWithChildren[],
+  ) => {
+    mooChildCategories.forEach(async (child) => {
+      // check if category exists in woo
+      // if not create category
+      // if exists update category
+      const slug = slugify(decodeHtmlEntities(child.name));
+      const wooChildCategory = await woo.get("products/categories", {
+        slug,
+      }).then(
+        (response: unknown) => {
+          const schema = z.object({
+            data: z.array(wooProductCategory),
+          });
+          return schema.parse(response).data[0] ?? null;
+        },
+      ).catch(
+        (error: Error) => {
+          console.error("failed to get category:", error);
+          return null;
+        },
+      );
+      const wooParentCategory = mooParentCategory
+        ? await woo.get("products/categories", {
+          slug: slugify(decodeHtmlEntities(mooParentCategory.name)),
+        }).then(
+          (response: unknown) => {
+            const schema = z.object({
+              data: z.array(wooProductCategory),
+            });
+            return schema.parse(response).data[0] ?? null;
+          },
+        ).catch(
+          (error: Error) => {
+            console.error("failed to get parent category:", error);
+            return null;
+          },
+        )
+        : null;
+      const commonFields = {
+        name: child.name,
+        description: canonicalizeHTML(child.description),
+        parent: wooParentCategory?.id ?? 0,
+      };
+      if (!wooChildCategory) {
+        await woo.post("products/categories", {
+          ...commonFields,
+          slug,
+        }).then(
+          (_response: unknown) => {
+            console.info("created category:", slug);
+          },
+        ).catch(
+          (error: Error) => {
+            console.error("failed to create category:", error);
+          },
+        );
+      } else {
+        const updatedFields = updatedDiff(wooChildCategory, commonFields);
+        if (Object.keys(updatedFields).length > 0) {
+          console.info(
+            "updating category:",
+            updatedFields,
+            "previous:",
+            R.pick(Object.keys(updatedFields), wooChildCategory),
+          );
+          await woo.put(`products/categories/${wooChildCategory.id}`, {}).then(
+            (_response: unknown) => {
+              console.info("updated category:", slug);
+            },
+          ).catch(
+            (error: Error) => {
+              console.error("failed to update category:", error);
+            },
+          );
+        }
+      }
+      syncCategores(child, child.children);
+    });
+  };
+  syncCategores(null, mooCategories);
+
   const { courses, total: totalCourses } = await moo.core.course.searchCourses({
     criterianame: "tagid", // Criteria name (search, modulelist (only admins), blocklist (only admins), tagid).
     criteriavalue: "*",
@@ -141,13 +273,35 @@ if (import.meta.main) {
   );
   console.info("total courses found:", totalCourses);
   // get course outline
-  moo.core.course.getContents({
-    courseid: courses[5].id,
-  }).then(
-    (response: unknown) => {
-      console.log(response);
-    },
-  );
+  // moo.core.course.getContents({
+  //   courseid: 9,
+  // }).then(
+  //   (response: unknown) => {
+  //     // console.debug("course outline:", response);
+  //     const schema = z.array(z.object({
+  //       id: z.number(),
+  //       name: z.string(),
+  //       modules: z.array(z.object({
+  //         name: z.string(),
+  //         description: z.optional(z.string()),
+  //         // visible: z.number(),
+  //         // uservisible: z.boolean(),
+  //         // visibleoncoursepage: z.number(),
+  //         // modicon: z.string(),
+  //         // purpose: z.string(),
+  //       })),
+  //     }));
+  //     return schema.parse(response);
+  //   },
+  // ).then(
+  //   (response) => {
+  //     console.info("course outline:", response);
+  //   },
+  // ).catch(
+  //   (error: Error) => {
+  //     console.error("failed to get course outline:", error);
+  //   },
+  // );
 
   const courseQueue = courses.slice();
   const concurrency = 10;
@@ -186,8 +340,23 @@ if (import.meta.main) {
           name,
           short_description,
           images: image ? [{ id: image.id }] : [],
+          categories: await woo.get("products/categories", {
+            slug: slugify(decodeHtmlEntities(course.categoryname)),
+          }).then(
+            (response: unknown) => {
+              const schema = z.object({
+                data: z.array(wooProductCategory),
+              });
+              return schema.parse(response).data;
+            },
+          ).catch(
+            (error: Error) => {
+              console.error("failed to get category:", error);
+              return [];
+            },
+          ),
         };
-
+        // console.debug(product, course, commonFields);
         if (!product) {
           await woo.post("products", {
             ...commonFields,

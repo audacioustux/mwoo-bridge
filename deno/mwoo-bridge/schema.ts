@@ -211,3 +211,13 @@ export const wooOrder = z.object({
     ),
   }),
 });
+
+export const wooProductCategory = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  parent: z.number(),
+  description: z.string(),
+  menu_order: z.number(),
+  count: z.number(),
+});
