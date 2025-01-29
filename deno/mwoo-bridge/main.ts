@@ -11,7 +11,7 @@ import z from "npm:zod";
 import { JSDOM } from "npm:jsdom";
 import { minify } from "npm:@minify-html/wasm";
 import { encodeHex } from "jsr:@std/encoding/hex";
-import { updatedDiff } from "npm:deep-object-diff";
+import { detailedDiff } from "npm:deep-object-diff";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -27,6 +27,49 @@ const moo = MoodleApi({
   baseUrl: "https://learn.jobready.global",
   token: Deno.env.get("MOO_TOKEN"),
 });
+
+type DeepEqualOptions = {
+  strictArrayOrder?: boolean;
+};
+
+function isDeepEqual<T extends Record<string, unknown>>(
+  left: T,
+  right: Partial<T>,
+  options: DeepEqualOptions = { strictArrayOrder: true },
+): boolean {
+  if (left === right) return true;
+  if (
+    left === null || right === null || typeof left !== "object" ||
+    typeof right !== "object"
+  ) {
+    return false;
+  }
+
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) return false;
+
+    if (options.strictArrayOrder) {
+      return left.every((value, index) =>
+        isDeepEqual(value, right[index], options)
+      );
+    } else {
+      return right.every((rightValue) =>
+        left.some((leftValue) => isDeepEqual(leftValue, rightValue, options))
+      );
+    }
+  }
+
+  const rightKeys = Object.keys(right) as (keyof T)[];
+
+  return rightKeys.every((key) => {
+    if (!(key in left)) return false;
+    return isDeepEqual(
+      left[key] as Record<string, unknown>,
+      right[key] as Record<string, unknown>,
+      options,
+    );
+  });
+}
 
 const syncMedia = async (
   sourceUrl: string,
@@ -174,15 +217,11 @@ if (import.meta.main) {
         return [];
       },
     );
-  // console.log(JSON.stringify(mooCategories, null, 2));
   const syncCategores = (
     mooParentCategory: IMoodleCategoryWithChildren | null,
     mooChildCategories: IMoodleCategoryWithChildren[],
   ) => {
     mooChildCategories.forEach(async (child) => {
-      // check if category exists in woo
-      // if not create category
-      // if exists update category
       const slug = slugify(decodeHtmlEntities(child.name));
       const wooChildCategory = await woo.get("products/categories", {
         slug,
@@ -235,24 +274,20 @@ if (import.meta.main) {
           },
         );
       } else {
-        const updatedFields = updatedDiff(wooChildCategory, commonFields);
-        if (Object.keys(updatedFields).length > 0) {
+        if (!isDeepEqual(wooChildCategory, commonFields)) {
           console.info(
-            "updating category:",
-            updatedFields,
-            "previous:",
-            R.pick(Object.keys(updatedFields), wooChildCategory),
+            detailedDiff(wooChildCategory, commonFields),
           );
-          await woo.put(`products/categories/${wooChildCategory.id}`, {}).then(
-            (_response: unknown) => {
-              console.info("updated category:", slug);
-            },
+          await woo.put(
+            `products/categories/${wooChildCategory.id}`,
+            commonFields,
           ).catch(
             (error: Error) => {
               console.error("failed to update category:", error);
             },
           );
         }
+        console.info("updated category:", slug);
       }
       syncCategores(child, child.children);
     });
@@ -339,13 +374,15 @@ if (import.meta.main) {
         const commonFields: Partial<typeof product> = {
           name,
           short_description,
-          images: image ? [{ id: image.id }] : [],
+          images: image ? [{ id: image.id }] : undefined,
           categories: await woo.get("products/categories", {
             slug: slugify(decodeHtmlEntities(course.categoryname)),
           }).then(
             (response: unknown) => {
               const schema = z.object({
-                data: z.array(wooProductCategory),
+                data: z.array(z.object({
+                  id: z.number(),
+                })),
               });
               return schema.parse(response).data;
             },
@@ -356,7 +393,6 @@ if (import.meta.main) {
             },
           ),
         };
-        // console.debug(product, course, commonFields);
         if (!product) {
           await woo.post("products", {
             ...commonFields,
@@ -368,28 +404,24 @@ if (import.meta.main) {
           }).catch((error: Error) => {
             console.error("failed to create product:", error);
           });
-          console.debug("created:", sku);
+          console.debug("created product:", sku);
         } else {
           const transProduct = R.pipe(
             R.evolve({
               short_description: canonicalizeHTML,
             }),
           )(product);
-          const updatedFields = updatedDiff(transProduct, commonFields);
-          if (Object.keys(updatedFields).length > 0) {
+          if (!isDeepEqual(transProduct, commonFields)) {
             console.info(
-              "updating:",
-              updatedFields,
-              "previous:",
-              R.pick(Object.keys(updatedFields), product),
+              detailedDiff(transProduct, commonFields),
             );
-            await woo.put(`products/${product.id}`, updatedFields).catch(
+            await woo.put(`products/${product.id}`, commonFields).catch(
               (error: Error) => {
                 console.error("failed to update product:", error);
               },
             );
           }
-          console.debug("updated:", sku);
+          console.debug("updated product:", sku);
         }
       }
     }),
