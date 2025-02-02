@@ -61,7 +61,11 @@ export const wooProduct = z.object({
   variations: z.array(z.unknown()),
   grouped_products: z.array(z.unknown()),
   menu_order: z.number(),
-  meta_data: z.array(z.unknown()),
+  meta_data: z.array(z.object({
+    id: z.number(),
+    key: z.string(),
+    value: z.any(),
+  })),
   _links: z.unknown(),
 });
 
@@ -220,4 +224,43 @@ export const wooProductCategory = z.object({
   description: z.string(),
   menu_order: z.number(),
   count: z.number(),
+});
+
+export const mooCourseModule = z.object({
+  id: z.number(),
+  name: z.string(),
+  instance: z.number(),
+  contextid: z.number(),
+  description: z.string().optional(),
+  visible: z.number(),
+  uservisible: z.boolean(),
+  visibleoncoursepage: z.number(),
+  modicon: z.string().url(),
+  modname: z.string(),
+  purpose: z.string(),
+  branded: z.boolean(),
+  modplural: z.string(),
+  availability: z.null(),
+  indent: z.number(),
+  onclick: z.string(),
+  afterlink: z.null(),
+  customdata: z.string(),
+  noviewlink: z.boolean(),
+  completion: z.number(),
+  downloadcontent: z.number(),
+  dates: z.array(z.unknown()),
+  groupmode: z.number(),
+  url: z.string().url().optional(),
+});
+
+export const mooCourseContent = z.object({
+  id: z.number(),
+  name: z.string(),
+  visible: z.number(),
+  summary: z.string(),
+  summaryformat: z.number(),
+  section: z.number(),
+  hiddenbynumsections: z.number(),
+  uservisible: z.boolean(),
+  modules: z.array(mooCourseModule),
 });

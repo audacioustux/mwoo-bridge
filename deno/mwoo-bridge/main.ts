@@ -2,22 +2,21 @@ import WooCommerceRestApi from "npm:@woocommerce/woocommerce-rest-api";
 import { IMoodleCategory, MoodleApi } from "npm:@webhare/moodle-webservice";
 import {
   mooCourse,
+  mooCourseContent,
   wooOrder,
   wooProduct,
   wooProductCategory,
 } from "./schema.ts";
 import * as R from "npm:ramda";
 import z from "npm:zod";
-import { JSDOM } from "npm:jsdom";
-import { minify } from "npm:@minify-html/wasm";
+// import { JSDOM } from "npm:jsdom";
 import { encodeHex } from "jsr:@std/encoding/hex";
-import { detailedDiff } from "npm:deep-object-diff";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 const woo = new WooCommerceRestApi.default({
-  url: "https://beta.jobready.global",
+  url: Deno.env.get("WOO_URL"),
   consumerKey: Deno.env.get("WOO_CONSUMER_KEY"),
   consumerSecret: Deno.env.get("WOO_CONSUMER_SECRET"),
   version: "wc/v3",
@@ -28,47 +27,123 @@ const moo = MoodleApi({
   token: Deno.env.get("MOO_TOKEN"),
 });
 
-type DeepEqualOptions = {
-  strictArrayOrder?: boolean;
-};
+export interface DiffOptions {
+  [key: string]: {
+    unique_by?: string;
+  };
+}
 
-function isDeepEqual<T extends Record<string, unknown>>(
-  left: T,
-  right: Partial<T>,
-  options: DeepEqualOptions = { strictArrayOrder: true },
-): boolean {
-  if (left === right) return true;
-  if (
-    left === null || right === null || typeof left !== "object" ||
-    typeof right !== "object"
-  ) {
-    return false;
-  }
+function computeDiff(
+  leftVal: unknown,
+  rightVal: unknown,
+  currentKey: string | undefined,
+  options: DiffOptions | undefined,
+): unknown {
+  // Handle arrays
+  if (Array.isArray(rightVal)) {
+    if (!Array.isArray(leftVal)) {
+      // If left is not an array then the whole right array is the diff.
+      return rightVal;
+    }
+    const meta = currentKey && options ? options[currentKey] : undefined;
+    if (meta?.unique_by) {
+      const uniqueBy = meta.unique_by;
+      const leftArray: unknown[] = leftVal;
+      const rightArray: unknown[] = rightVal;
+      const leftMap = new Map<unknown, unknown>();
 
-  if (Array.isArray(left) && Array.isArray(right)) {
-    if (left.length !== right.length) return false;
+      for (const item of leftArray) {
+        if (typeof item !== "object" || item === null) {
+          throw new Error(
+            `Expected object elements in array "${currentKey}" (left).`,
+          );
+        }
+        const objItem = item as Record<string, unknown>;
+        const keyValue = objItem[uniqueBy];
+        if (keyValue === undefined) {
+          throw new Error(
+            `unique_by key "${uniqueBy}" not found in an element of left array "${currentKey}".`,
+          );
+        }
+        leftMap.set(keyValue, item);
+      }
 
-    if (options.strictArrayOrder) {
-      return left.every((value, index) =>
-        isDeepEqual(value, right[index], options)
-      );
+      const diffArray: unknown[] = [];
+      for (const item of rightArray) {
+        if (typeof item !== "object" || item === null) {
+          throw new Error(
+            `Expected object elements in array "${currentKey}" (right).`,
+          );
+        }
+        const objItem = item as Record<string, unknown>;
+        const keyValue = objItem[uniqueBy];
+        if (keyValue === undefined) {
+          throw new Error(
+            `unique_by key "${uniqueBy}" not found in an element of right array "${currentKey}".`,
+          );
+        }
+        const leftItem = leftMap.get(keyValue);
+        const diffItem = leftItem !== undefined
+          ? computeDiff(leftItem, item, currentKey, options)
+          : item;
+        // If there is any difference (or the element is new) add it to the diff array.
+        if (diffItem !== undefined && !R.equals(diffItem, {})) {
+          diffArray.push(item);
+        }
+      }
+      return diffArray.length > 0 ? diffArray : undefined;
     } else {
-      return right.every((rightValue) =>
-        left.some((leftValue) => isDeepEqual(leftValue, rightValue, options))
-      );
+      // If no meta options, compare array elements by index.
+      const leftArray: unknown[] = leftVal;
+      const rightArray: unknown[] = rightVal;
+      if (leftArray.length !== rightArray.length) {
+        return rightVal;
+      }
+      const result: unknown[] = [];
+      for (let i = 0; i < rightArray.length; i++) {
+        result.push(
+          computeDiff(leftArray[i], rightArray[i], currentKey, options),
+        );
+      }
+      if (result.every((el) => el === undefined)) {
+        return undefined;
+      }
+      return result;
     }
   }
 
-  const rightKeys = Object.keys(right) as (keyof T)[];
+  // Handle objects
+  if (typeof rightVal === "object" && rightVal !== null) {
+    if (typeof leftVal !== "object" || leftVal === null) {
+      return rightVal;
+    }
+    const rightObj = rightVal as Record<string, unknown>;
+    const leftObj = leftVal as Record<string, unknown>;
+    const diffObj: Record<string, unknown> = {};
+    // Only keys present on the right are considered.
+    for (const key of Object.keys(rightObj)) {
+      const diff = computeDiff(leftObj[key], rightObj[key], key, options);
+      if (diff !== undefined) {
+        diffObj[key] = diff;
+      }
+    }
+    return Object.keys(diffObj).length > 0 ? diffObj : undefined;
+  }
 
-  return rightKeys.every((key) => {
-    if (!(key in left)) return false;
-    return isDeepEqual(
-      left[key] as Record<string, unknown>,
-      right[key] as Record<string, unknown>,
-      options,
-    );
-  });
+  // Handle primitives and other types.
+  if (!R.equals(leftVal, rightVal)) {
+    return rightVal;
+  }
+  return undefined;
+}
+
+export function deepDiff<L, R>(
+  left: L,
+  right: R,
+  options?: DiffOptions,
+): Record<string, unknown> {
+  const diff = computeDiff(left, right, undefined, options);
+  return diff === undefined ? {} : (diff as Record<string, unknown>);
 }
 
 const syncMedia = async (
@@ -77,7 +152,8 @@ const syncMedia = async (
   caption?: string,
   description?: string,
 ): Promise<{ id: number } | undefined> => {
-  const apiUrl = "https://beta.jobready.global/wp-json/wp/v2/media";
+  // const apiUrl = "https://staging.jobready.global/wp-json/wp/v2/media";
+  const apiUrl = Deno.env.get("WP_URL") + "/wp-json/wp/v2/media";
   const username = Deno.env.get("WP_USERNAME");
   const password = Deno.env.get("WP_PASSWORD");
 
@@ -158,8 +234,9 @@ const syncMedia = async (
 };
 
 function decodeHtmlEntities(text: string): string {
-  const dom = new JSDOM(`<body>${text}</body>`);
-  return dom.window.document.body.textContent ?? "";
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "text/html");
+  return doc.body.textContent ?? "";
 }
 
 function slugify(text: string): string {
@@ -172,24 +249,24 @@ function slugify(text: string): string {
   )(text);
 }
 
-function canonicalizeHTML(html: string): string {
-  const dom = new JSDOM(`<body>${html}</body>`);
-  const bodyContent = dom.window.document.body.innerHTML;
+// function canonicalizeHTML(html: string): string {
+//   const dom = new JSDOM(`<body>${html}</body>`);
+//   const bodyContent = dom.window.document.body.innerHTML;
 
-  const htmlEncode = (text: string): string => {
-    const specialCharsMap = {
-      "-": "&#8211;",
-    } as Record<string, string>;
-    const specialChars = Object.keys(specialCharsMap).join("");
-    const specialCharsRegex = new RegExp(`[${specialChars}]`, "g");
-    const specialCharsReplacer = (match: string) => specialCharsMap[match];
-    return text.replace(specialCharsRegex, specialCharsReplacer);
-  };
+//   const htmlEncode = (text: string): string => {
+//     const specialCharsMap = {
+//       "-": "&#8211;",
+//     } as Record<string, string>;
+//     const specialChars = Object.keys(specialCharsMap).join("");
+//     const specialCharsRegex = new RegExp(`[${specialChars}]`, "g");
+//     const specialCharsReplacer = (match: string) => specialCharsMap[match];
+//     return text.replace(specialCharsRegex, specialCharsReplacer);
+//   };
 
-  return decoder.decode(
-    minify(encoder.encode(htmlEncode(bodyContent)), {}),
-  );
-}
+//   return decoder.decode(
+//     minify(encoder.encode(htmlEncode(bodyContent)), {}),
+//   );
+// }
 
 type IMoodleCategoryWithChildren = IMoodleCategory & {
   children: IMoodleCategoryWithChildren[];
@@ -257,7 +334,7 @@ if (import.meta.main) {
         : null;
       const commonFields = {
         name: child.name,
-        description: canonicalizeHTML(child.description),
+        description: child.description,
         parent: wooParentCategory?.id ?? 0,
       };
       if (!wooChildCategory) {
@@ -274,10 +351,9 @@ if (import.meta.main) {
           },
         );
       } else {
-        if (!isDeepEqual(wooChildCategory, commonFields)) {
-          console.info(
-            detailedDiff(wooChildCategory, commonFields),
-          );
+        const diff = deepDiff(wooChildCategory, commonFields);
+        if (Object.keys(diff).length > 0) {
+          console.info("diff:", diff);
           await woo.put(
             `products/categories/${wooChildCategory.id}`,
             commonFields,
@@ -308,37 +384,121 @@ if (import.meta.main) {
   );
   console.info("total courses found:", totalCourses);
   // get course outline
-  // moo.core.course.getContents({
-  //   courseid: 9,
+  // const _mooCourse = await moo.core.course.getContents({
+  //   courseid: 66,
   // }).then(
   //   (response: unknown) => {
-  //     // console.debug("course outline:", response);
-  //     const schema = z.array(z.object({
-  //       id: z.number(),
-  //       name: z.string(),
-  //       modules: z.array(z.object({
-  //         name: z.string(),
-  //         description: z.optional(z.string()),
-  //         // visible: z.number(),
-  //         // uservisible: z.boolean(),
-  //         // visibleoncoursepage: z.number(),
-  //         // modicon: z.string(),
-  //         // purpose: z.string(),
-  //       })),
-  //     }));
+  //     const schema = z.array(mooCourseContent);
   //     return schema.parse(response);
   //   },
   // ).then(
   //   (response) => {
-  //     console.info("course outline:", response);
+  //     // console.info("course outline:", response);
+  //     // save course outline to file
+  //     Deno.writeTextFile(
+  //       "course-outline.json",
+  //       JSON.stringify(response, null, 2),
+  //     );
+  //     return response;
   //   },
   // ).catch(
   //   (error: Error) => {
   //     console.error("failed to get course outline:", error);
   //   },
   // );
+  // const process_course_content = (
+  //   _mooCourse: typeof mooCourseContent[],
+  // ): { [key: string]: string | string[] } => {
+  //   const nameMap: { [key: string]: string } = {
+  //     "কোর্সটি করে যা শিখবেন": "learning_outcomes",
+  //     "এই কোর্সটি কেন করবেন?": "why_do_this_course",
+  //     "পূর্বশর্ত": "prerequisites",
+  //     "মেটেরিয়াল ইনক্লুডস": "includes_material",
+  //     "কোর্স সম্পর্কে": "course_description",
+  //   };
+  //   const mappping = _mooCourse.flatMap((section) => section.modules).filter((
+  //     module,
+  //   ) =>
+  //     module.modname === "label" && Object.keys(nameMap)
+  //       .includes(
+  //         module.name,
+  //       )
+  //   ).map((module) => {
+  //     // map module name to description
+  //     return {
+  //       name: nameMap[module.name],
+  //       description: module.description,
+  //     };
+  //   }).reduce((acc, { name, description }) => {
+  //     return {
+  //       ...acc,
+  //       [name]: description,
+  //     };
+  //   }, {});
 
-  const courseQueue = courses.slice();
+  //   const listify = (html: string) => {
+  //     const parser = new DOMParser();
+  //     const doc = parser.parseFromString(html, "text/html");
+  //     const ul = doc.querySelectorAll(".no-overflow > ul");
+  //     if (ul.length === 0) return [];
+  //     if (ul.length > 1) {
+  //       console.warn("multiple top-level ul found in html:", html);
+  //       return [];
+  //     }
+  //     // get html content of each li of the ul (trim and remove empty strings and newlines)
+  //     return Array.from(ul[0].children).map((li) =>
+  //       li.innerHTML.replace(/\n/g, "").trim()
+  //     ).flat();
+  //   };
+  //   const remove_wrap = (html: string) => {
+  //     const parser = new DOMParser();
+  //     const doc = parser.parseFromString(html, "text/html");
+  //     const wrap = doc.querySelectorAll("div.no-overflow");
+  //     if (wrap.length !== 1) {
+  //       console.warn("no-overflow div not found in html:", html);
+  //       return "";
+  //     }
+  //     return wrap[0].innerHTML.replace(/\n/g, "").trim();
+  //   };
+  //   const _mapping = R.evolve({
+  //     learning_outcomes: listify,
+  //     why_do_this_course: listify,
+  //     prerequisites: listify,
+  //     includes_material: listify,
+  //     course_description: remove_wrap,
+  //   }, mappping);
+  //   // save mapping to file
+  //   Deno.writeTextFile(
+  //     "course-mapping.json",
+  //     JSON.stringify(_mapping, null, 2),
+  //   );
+  //   // console.info("mapping:", _mapping);
+  //   return _mapping;
+  // };
+
+  // get course with C009 sku
+  const _wooCourse = await (woo.get("products", {
+    sku: "C066",
+  }) as Promise<unknown>).then(
+    (response: unknown) => {
+      const schema = z.object({
+        data: z.array(wooProduct),
+      });
+      return schema.parse(response).data[0];
+    },
+  ).catch(
+    (error: Error) => {
+      console.error("failed to get product:", error);
+    },
+  );
+  console.info("product:", _wooCourse);
+  // // save _wooCourse to file
+  // Deno.writeTextFile(
+  //   "product-C066.json",
+  //   JSON.stringify(_wooCourse, null, 2),
+  // );
+
+  const courseQueue = courses.slice(50, 51);
   const concurrency = 10;
   Promise.all(
     Array.from({ length: concurrency }).map(async () => {
@@ -346,10 +506,10 @@ if (import.meta.main) {
         const course = courseQueue.pop();
         if (!course) break;
 
-        const sku = `MOO_${course.id}`;
-        const product = await woo.get("products", {
+        const sku = `C${course.id.toString().padStart(3, "0")}`;
+        const product = await (woo.get("products", {
           sku,
-        }).then(
+        }) as Promise<unknown>).then(
           (response: unknown) => {
             const schema = z.object({
               data: z.array(wooProduct),
@@ -364,16 +524,96 @@ if (import.meta.main) {
         );
 
         const name = R.trim(course.fullname);
-        const short_description = canonicalizeHTML(course.summary);
         const image = await syncMedia(
           course.courseimage,
           name,
           course.shortname,
-          short_description,
+          course.summary,
         );
-        const commonFields: Partial<typeof product> = {
+
+        const introduction = await (async (courseid: number) => {
+          const courseContent = await moo.core.course.getContents({
+            courseid,
+          }).then(
+            (response: unknown) => {
+              const schema = z.array(mooCourseContent);
+              return schema.parse(response);
+            },
+          ).catch(
+            (error: Error) => {
+              console.error("failed to get course content:", error);
+              return [];
+            },
+          );
+
+          const modulesNameMap = {
+            "কোর্সটি করে যা শিখবেন": "learning_outcomes",
+            "এই কোর্সটি কেন করবেন?": "why_do_this_course",
+            "পূর্বশর্ত": "prerequisites",
+            "মেটেরিয়াল ইনক্লুডস": "includes_material",
+            "কোর্স সম্পর্কে": "course_description",
+          };
+
+          const mappping = courseContent.flatMap((section) => section.modules)
+            .filter((module) =>
+              module.modname === "label" && Object.keys(modulesNameMap)
+                .includes(module.name)
+            ).map((module) => {
+              return {
+                name:
+                  modulesNameMap[module.name as keyof typeof modulesNameMap],
+                description: module.description,
+              };
+            }).reduce((acc, { name, description }) => {
+              return {
+                ...acc,
+                [name]: description,
+              };
+            }, {});
+
+          const listify = (html: string) => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const ul = doc.querySelectorAll(".no-overflow > ul");
+            if (ul.length === 0) return [];
+            if (ul.length > 1) {
+              console.warn("multiple top-level ul found in html:", html);
+              return [];
+            }
+            return Array.from(ul[0].children).map((li) =>
+              li.innerHTML.replace(/\n/g, "").trim()
+            ).flat();
+          };
+          const remove_wrap = (html: string) => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const wrap = doc.querySelectorAll("div.no-overflow");
+            if (wrap.length !== 1) {
+              console.warn("no-overflow div not found in html:", html);
+              return "";
+            }
+            return wrap[0].innerHTML.replace(/\n/g, "").trim();
+          };
+
+          return R.evolve({
+            learning_outcomes: listify,
+            why_do_this_course: listify,
+            prerequisites: listify,
+            includes_material: listify,
+            course_description: remove_wrap,
+          }, mappping);
+        })(course.id);
+        console.info("intro:", introduction);
+
+        const commonFields = {
           name,
-          short_description,
+          short_description: "",
+          meta_data: [
+            {
+              key: "course_description",
+              value: course.summary,
+            },
+          ],
           images: image ? [{ id: image.id }] : undefined,
           categories: await woo.get("products/categories", {
             slug: slugify(decodeHtmlEntities(course.categoryname)),
@@ -406,21 +646,18 @@ if (import.meta.main) {
           });
           console.debug("created product:", sku);
         } else {
-          const transProduct = R.pipe(
-            R.evolve({
-              short_description: canonicalizeHTML,
-            }),
-          )(product);
-          if (!isDeepEqual(transProduct, commonFields)) {
-            console.info(
-              detailedDiff(transProduct, commonFields),
-            );
+          const diff = deepDiff(product, commonFields, {
+            meta_data: { unique_by: "key" },
+          });
+          if (Object.keys(diff).length > 0) {
+            console.info("diff:", diff);
             await woo.put(`products/${product.id}`, commonFields).catch(
               (error: Error) => {
                 console.error("failed to update product:", error);
               },
             );
           }
+
           console.debug("updated product:", sku);
         }
       }
@@ -470,7 +707,7 @@ if (import.meta.main) {
         console.debug("created user:", user);
       }
       const course_ids = order.line_items.map((lineItem) =>
-        Number(lineItem.sku.replace("MOO_", ""))
+        Number(lineItem.sku.replace("C", ""))
       );
       for (const course_id of course_ids) {
         const course = courses.find((course) => course.id === course_id);

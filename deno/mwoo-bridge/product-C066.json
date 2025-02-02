@@ -1,0 +1,517 @@
+{
+  "id": 10657,
+  "name": "Emergency Health Care",
+  "slug": "emergency-health-care",
+  "permalink": "https://staging.jobready.global/product/emergency-health-care/",
+  "date_created": "2025-02-02T10:29:20",
+  "date_modified": "2025-02-02T19:50:22",
+  "type": "simple",
+  "status": "private",
+  "featured": false,
+  "catalog_visibility": "visible",
+  "description": "",
+  "short_description": "",
+  "sku": "C066",
+  "price": "",
+  "regular_price": "",
+  "sale_price": "",
+  "date_on_sale_from": null,
+  "date_on_sale_to": null,
+  "price_html": "",
+  "on_sale": false,
+  "purchasable": false,
+  "total_sales": 0,
+  "virtual": true,
+  "downloadable": false,
+  "downloads": [],
+  "download_limit": -1,
+  "download_expiry": -1,
+  "external_url": "",
+  "button_text": "",
+  "tax_status": "taxable",
+  "tax_class": "",
+  "manage_stock": false,
+  "stock_quantity": null,
+  "stock_status": "instock",
+  "backorders": "no",
+  "backorders_allowed": false,
+  "backordered": false,
+  "sold_individually": true,
+  "weight": "",
+  "dimensions": {
+    "length": "",
+    "width": "",
+    "height": ""
+  },
+  "shipping_required": false,
+  "shipping_taxable": false,
+  "shipping_class": "",
+  "shipping_class_id": 0,
+  "reviews_allowed": false,
+  "average_rating": "0.00",
+  "rating_count": 0,
+  "related_ids": [],
+  "upsell_ids": [],
+  "cross_sell_ids": [],
+  "parent_id": 0,
+  "purchase_note": "",
+  "categories": [
+    {
+      "id": 109,
+      "name": "Digital Courses",
+      "slug": "digital-courses"
+    }
+  ],
+  "tags": [],
+  "images": [
+    {
+      "id": 10494,
+      "date_created": "2025-02-02T10:14:56",
+      "date_created_gmt": "2025-02-02T10:14:56",
+      "date_modified": "2025-02-02T19:32:05",
+      "date_modified_gmt": "2025-02-02T19:32:05",
+      "src": "https://staging.jobready.global/wp-content/uploads/2025/02/moo_679be67ce050947ba9a37e9aa3db9063bd764f033eb8d704552cbaf54bc6150b.png",
+      "name": "Emergency Health Care",
+      "alt": "Emergency Health Care"
+    }
+  ],
+  "attributes": [],
+  "default_attributes": [],
+  "variations": [],
+  "grouped_products": [],
+  "menu_order": 0,
+  "meta_data": [
+    {
+      "id": 38980,
+      "key": "course_description",
+      "value": "<p> রোগীকে ডাক্তারের কাছে বা হাসপাতালে স্থানান্তরিত করার পূর্বে  দুর্ঘটনা কবলিত ব্যক্তিকে তাৎক্ষণিকভাবে জরুরী ভিত্তিতে যে চিকিৎসা প্রদান করা হয় তাকে প্রাথমিক চিকিৎসা বলে।</p>"
+    },
+    {
+      "id": 39894,
+      "key": "learning_outcomes",
+      "value": "2"
+    },
+    {
+      "id": 39899,
+      "key": "_wp_page_template",
+      "value": "default"
+    },
+    {
+      "id": 39900,
+      "key": "wellearn_disable_page_title",
+      "value": "0"
+    },
+    {
+      "id": 39901,
+      "key": "wellearn_no_breadcrumbs",
+      "value": "0"
+    },
+    {
+      "id": 39902,
+      "key": "wellearn_breadcrumb_layout",
+      "value": "layout_options"
+    },
+    {
+      "id": 39903,
+      "key": "wellearn_breacrumb_bg_opacity",
+      "value": "50"
+    },
+    {
+      "id": 39904,
+      "key": "_sumo_pp_enable_sumopaymentplans",
+      "value": ""
+    },
+    {
+      "id": 39905,
+      "key": "_sumo_pp_payment_type",
+      "value": "pay-in-deposit"
+    },
+    {
+      "id": 39906,
+      "key": "_sumo_pp_available_dates_from",
+      "value": ""
+    },
+    {
+      "id": 39907,
+      "key": "_sumo_pp_available_dates_to",
+      "value": ""
+    },
+    {
+      "id": 39908,
+      "key": "_sumo_pp_apply_global_settings",
+      "value": ""
+    },
+    {
+      "id": 39909,
+      "key": "_sumo_pp_force_deposit",
+      "value": ""
+    },
+    {
+      "id": 39910,
+      "key": "_sumo_pp_default_selected_type",
+      "value": "full-pay"
+    },
+    {
+      "id": 39911,
+      "key": "_sumo_pp_deposit_type",
+      "value": "pre-defined"
+    },
+    {
+      "id": 39912,
+      "key": "_sumo_pp_deposit_price_type",
+      "value": "fixed-price"
+    },
+    {
+      "id": 39913,
+      "key": "_sumo_pp_pay_balance_type",
+      "value": "after"
+    },
+    {
+      "id": 39914,
+      "key": "_sumo_pp_pay_balance_after",
+      "value": ""
+    },
+    {
+      "id": 39915,
+      "key": "_sumo_pp_pay_balance_before",
+      "value": ""
+    },
+    {
+      "id": 39916,
+      "key": "_sumo_pp_pay_balance_before_booked_date",
+      "value": ""
+    },
+    {
+      "id": 39917,
+      "key": "_sumo_pp_set_expired_deposit_payment_as",
+      "value": "normal"
+    },
+    {
+      "id": 39918,
+      "key": "_sumo_pp_fixed_deposit_price",
+      "value": ""
+    },
+    {
+      "id": 39919,
+      "key": "_sumo_pp_fixed_deposit_percent",
+      "value": ""
+    },
+    {
+      "id": 39920,
+      "key": "_sumo_pp_user_defined_deposit_type",
+      "value": "percent-of-product-price"
+    },
+    {
+      "id": 39921,
+      "key": "_sumo_pp_min_user_defined_deposit_price",
+      "value": ""
+    },
+    {
+      "id": 39922,
+      "key": "_sumo_pp_max_user_defined_deposit_price",
+      "value": ""
+    },
+    {
+      "id": 39923,
+      "key": "_sumo_pp_min_deposit",
+      "value": ""
+    },
+    {
+      "id": 39924,
+      "key": "_sumo_pp_max_deposit",
+      "value": ""
+    },
+    {
+      "id": 39925,
+      "key": "_sumo_pp_selected_plans",
+      "value": ""
+    },
+    {
+      "id": 39926,
+      "key": "course_duration",
+      "value": ""
+    },
+    {
+      "id": 39927,
+      "key": "_course_duration",
+      "value": "field_6798587ef56a5"
+    },
+    {
+      "id": 39928,
+      "key": "no_of_lectures",
+      "value": ""
+    },
+    {
+      "id": 39929,
+      "key": "_no_of_lectures",
+      "value": "field_67985899f56a6"
+    },
+    {
+      "id": 39930,
+      "key": "course_level",
+      "value": ""
+    },
+    {
+      "id": 39931,
+      "key": "_course_level",
+      "value": "field_679858b4f56a7"
+    },
+    {
+      "id": 39932,
+      "key": "language",
+      "value": ""
+    },
+    {
+      "id": 39933,
+      "key": "_language",
+      "value": "field_679858cef56a9"
+    },
+    {
+      "id": 39934,
+      "key": "delivery_method",
+      "value": ""
+    },
+    {
+      "id": 39935,
+      "key": "_delivery_method",
+      "value": "field_67985a4b8bcb2"
+    },
+    {
+      "id": 39936,
+      "key": "course_promo",
+      "value": ""
+    },
+    {
+      "id": 39937,
+      "key": "_course_promo",
+      "value": "field_67985a2c8bcb1"
+    },
+    {
+      "id": 39938,
+      "key": "sub-headingtagline",
+      "value": ""
+    },
+    {
+      "id": 39939,
+      "key": "_sub-headingtagline",
+      "value": "field_67983c3663a6f"
+    },
+    {
+      "id": 39940,
+      "key": "_course_description",
+      "value": "field_67983cc0afe5f"
+    },
+    {
+      "id": 39943,
+      "key": "_learning_outcomes",
+      "value": "field_679850e2a2b9e"
+    },
+    {
+      "id": 39944,
+      "key": "why_do_this_course",
+      "value": ""
+    },
+    {
+      "id": 39945,
+      "key": "_why_do_this_course",
+      "value": "field_6798514515612"
+    },
+    {
+      "id": 39946,
+      "key": "course_outline",
+      "value": ""
+    },
+    {
+      "id": 39947,
+      "key": "_course_outline",
+      "value": "field_679851b9ddb63"
+    },
+    {
+      "id": 39948,
+      "key": "prerequisite",
+      "value": ""
+    },
+    {
+      "id": 39949,
+      "key": "_prerequisite",
+      "value": "field_6798584718f7a"
+    },
+    {
+      "id": 39950,
+      "key": "who_is_this_course_for",
+      "value": ""
+    },
+    {
+      "id": 39951,
+      "key": "_who_is_this_course_for",
+      "value": "field_6798581e18f78"
+    },
+    {
+      "id": 39952,
+      "key": "material_include",
+      "value": ""
+    },
+    {
+      "id": 39953,
+      "key": "_material_include",
+      "value": "field_679857f218f75"
+    },
+    {
+      "id": 39954,
+      "key": "professional_demand_-_skill_gap",
+      "value": ""
+    },
+    {
+      "id": 39955,
+      "key": "_professional_demand_-_skill_gap",
+      "value": "field_679855e56e842"
+    },
+    {
+      "id": 39956,
+      "key": "professional_demand_-_industry_adoption",
+      "value": ""
+    },
+    {
+      "id": 39957,
+      "key": "_professional_demand_-_industry_adoption",
+      "value": "field_679856006e843"
+    },
+    {
+      "id": 39958,
+      "key": "professional_demand_-_rapid_job_growth",
+      "value": ""
+    },
+    {
+      "id": 39959,
+      "key": "_professional_demand_-_rapid_job_growth",
+      "value": "field_679856226e844"
+    },
+    {
+      "id": 39960,
+      "key": "annual_income_range_career_prospect",
+      "value": ""
+    },
+    {
+      "id": 39961,
+      "key": "_annual_income_range_career_prospect",
+      "value": "field_6798571f34221"
+    },
+    {
+      "id": 39962,
+      "key": "annual_income_range_brief_career_prospect",
+      "value": ""
+    },
+    {
+      "id": 39963,
+      "key": "_annual_income_range_brief_career_prospect",
+      "value": "field_6798573c34222"
+    },
+    {
+      "id": 39964,
+      "key": "career_growth_percentage_career_prospect",
+      "value": ""
+    },
+    {
+      "id": 39965,
+      "key": "_career_growth_percentage_career_prospect",
+      "value": "field_6798575b34223"
+    },
+    {
+      "id": 39966,
+      "key": "career_growth_brief_career_prospect",
+      "value": ""
+    },
+    {
+      "id": 39967,
+      "key": "_career_growth_brief_career_prospect",
+      "value": "field_6798578334224"
+    },
+    {
+      "id": 39968,
+      "key": "sucess_story_url_#1",
+      "value": ""
+    },
+    {
+      "id": 39969,
+      "key": "_sucess_story_url_#1",
+      "value": "field_67985988cb88b"
+    },
+    {
+      "id": 39970,
+      "key": "sucess_story_url_#2",
+      "value": ""
+    },
+    {
+      "id": 39971,
+      "key": "_sucess_story_url_#2",
+      "value": "field_67985a06cb88c"
+    },
+    {
+      "id": 39972,
+      "key": "ae_post_template",
+      "value": "global"
+    },
+    {
+      "id": 39973,
+      "key": "om_disable_all_campaigns",
+      "value": ""
+    },
+    {
+      "id": 39974,
+      "key": "_yoast_wpseo_primary_product_brand",
+      "value": ""
+    },
+    {
+      "id": 39975,
+      "key": "_yoast_wpseo_primary_product_cat",
+      "value": ""
+    },
+    {
+      "id": 39976,
+      "key": "_yoast_wpseo_inclusive_language_score",
+      "value": "90"
+    },
+    {
+      "id": 39977,
+      "key": "_yoast_wpseo_estimated-reading-time-minutes",
+      "value": "1"
+    },
+    {
+      "id": 39978,
+      "key": "learning_outcomes_0_learning_outcome_list",
+      "value": "a"
+    },
+    {
+      "id": 39979,
+      "key": "_learning_outcomes_0_learning_outcome_list",
+      "value": "field_679850f3a2b9f"
+    },
+    {
+      "id": 39980,
+      "key": "learning_outcomes_1_learning_outcome_list",
+      "value": "b"
+    },
+    {
+      "id": 39981,
+      "key": "_learning_outcomes_1_learning_outcome_list",
+      "value": "field_679850f3a2b9f"
+    },
+    {
+      "id": 39996,
+      "key": "_elementor_page_assets",
+      "value": []
+    }
+  ],
+  "_links": {
+    "self": [
+      {
+        "href": "https://staging.jobready.global/wp-json/wc/v3/products/10657"
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://staging.jobready.global/wp-json/wc/v3/products"
+      }
+    ]
+  }
+}

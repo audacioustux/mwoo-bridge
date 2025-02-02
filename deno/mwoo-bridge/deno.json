@@ -7,7 +7,6 @@
     "@std/assert": "jsr:@std/assert@1",
     "@webhare/moodle-webservice": "npm:@webhare/moodle-webservice@^1.9.0",
     "@woocommerce/woocommerce-rest-api": "npm:@woocommerce/woocommerce-rest-api@^1.0.1",
-    "deep-object-diff": "npm:deep-object-diff@^1.1.9",
     "jsdom": "npm:jsdom@^26.0.0",
     "minify": "npm:minify@^12.0.1",
     "ramda": "npm:ramda@^0.30.1",
