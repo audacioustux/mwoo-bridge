@@ -1,5 +1,6 @@
-import WooCommerceRestApi from "npm:@woocommerce/woocommerce-rest-api";
-import { IMoodleCategory, MoodleApi } from "npm:@webhare/moodle-webservice";
+import { moo } from "./services/moo.ts";
+import { woo } from "./services/woo.ts";
+import { IMoodleCategory } from "npm:@webhare/moodle-webservice";
 import {
   mooCourse,
   mooCourseContent,
@@ -7,25 +8,13 @@ import {
   wooProduct,
   wooProductCategory,
 } from "./schema.ts";
-import * as R from "npm:ramda";
+import * as R from "https://deno.land/x/rambda@9.4.2/mod.ts";
 import z from "npm:zod";
 // import { JSDOM } from "npm:jsdom";
 import { encodeHex } from "jsr:@std/encoding/hex";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
 
 const encoder = new TextEncoder();
-
-const woo = new WooCommerceRestApi.default({
-  url: Deno.env.get("WOO_URL"),
-  consumerKey: Deno.env.get("WOO_CONSUMER_KEY"),
-  consumerSecret: Deno.env.get("WOO_CONSUMER_SECRET"),
-  version: "wc/v3",
-});
-
-const moo = MoodleApi({
-  baseUrl: "https://learn.jobready.global",
-  token: Deno.env.get("MOO_TOKEN"),
-});
 
 export interface DiffOptions {
   [key: string]: {
@@ -478,7 +467,7 @@ if (import.meta.main) {
 
   // get course with C009 sku
   const _wooCourse = await (woo.get("products", {
-    sku: "C066",
+    sku: "C074",
   }) as Promise<unknown>).then(
     (response: unknown) => {
       const schema = z.object({
@@ -498,7 +487,8 @@ if (import.meta.main) {
   //   JSON.stringify(_wooCourse, null, 2),
   // );
 
-  const courseQueue = courses.slice(50, 51);
+  // const courseQueue = courses.slice(50, 51);
+  const courseQueue = courses.filter((course) => course.id == 74);
   const concurrency = 10;
   Promise.all(
     Array.from({ length: concurrency }).map(async () => {
@@ -532,9 +522,9 @@ if (import.meta.main) {
         );
 
         const introduction = await (async (courseid: number) => {
-          const courseContent = await moo.core.course.getContents({
+          const courseContent = await (moo.core.course.getContents({
             courseid,
-          }).then(
+          }) as Promise<unknown>).then(
             (response: unknown) => {
               const schema = z.array(mooCourseContent);
               return schema.parse(response);
@@ -550,7 +540,7 @@ if (import.meta.main) {
             "কোর্সটি করে যা শিখবেন": "learning_outcomes",
             "এই কোর্সটি কেন করবেন?": "why_do_this_course",
             "পূর্বশর্ত": "prerequisites",
-            "মেটেরিয়াল ইনক্লুডস": "includes_material",
+            "মেটেরিয়াল ইনক্লুডস": "material_include",
             "কোর্স সম্পর্কে": "course_description",
           };
 
@@ -599,21 +589,91 @@ if (import.meta.main) {
             learning_outcomes: listify,
             why_do_this_course: listify,
             prerequisites: listify,
-            includes_material: listify,
+            material_include: listify,
             course_description: remove_wrap,
           }, mappping);
         })(course.id);
         console.info("intro:", introduction);
+        // convert to acf format
+        const acf_fields = R.evolve({
+          learning_outcomes: (learning_outcomes: string[]) => {
+            return [
+              {
+                key: "learning_outcomes",
+                value: `${learning_outcomes.length}`,
+              },
+              ...learning_outcomes.map((learning_outcome, index) => ({
+                key: `learning_outcomes_${index}_learning_outcome_list`,
+                value: learning_outcome,
+              })),
+            ];
+          },
+
+          why_do_this_course: (why_do_this_course: string[]) => {
+            return [
+              {
+                key: "why_do_this_course",
+                value: `${why_do_this_course.length}`,
+              },
+              ...why_do_this_course.map((why_do_this_course, index) => ({
+                key:
+                  `why_do_this_course_${index}_benefits_from_this_course_list`,
+                value: why_do_this_course,
+              })),
+            ];
+          },
+
+          prerequisites: (prerequisites: string[]) => {
+            return [
+              {
+                key: "prerequisites",
+                value: `${prerequisites.length}`,
+              },
+              ...prerequisites.map((prerequisite, index) => ({
+                key: `prerequisite_${index}_list`,
+                value: prerequisite,
+              })),
+            ];
+          },
+
+          material_include: (material_include: string[]) => {
+            return [
+              {
+                key: "material_include",
+                value: `${material_include.length}`,
+              },
+              ...material_include.map((includes_material, index) => ({
+                key: `material_include_${index}_list`,
+                value: includes_material,
+              })),
+            ];
+          },
+
+          course_description: (course_description: string) => {
+            return {
+              key: "course_description",
+              value: course_description,
+            };
+          },
+        }, introduction);
+        console.info("acf_fields:", [
+          Object.values(acf_fields).flat(),
+        ]);
 
         const commonFields = {
           name,
           short_description: "",
-          meta_data: [
-            {
-              key: "course_description",
-              value: course.summary,
-            },
-          ],
+          // meta_data: [
+          // {
+          //   key: "course_description",
+          //   value: course.summary,
+          // },
+          // ...Object.entries(acf_fields).map(([key, value]) => ({
+          //   key,
+          //   value: value,
+          // })),
+          // ],
+          meta_data: Object.values(acf_fields).flat(),
           images: image ? [{ id: image.id }] : undefined,
           categories: await woo.get("products/categories", {
             slug: slugify(decodeHtmlEntities(course.categoryname)),
