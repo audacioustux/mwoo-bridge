@@ -1,6 +1,7 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@audacioustux/deepjol@0.1": "0.1.0",
     "jsr:@rambda/rambda@9.4.2": "9.4.2",
     "jsr:@std/assert@*": "1.0.10",
     "jsr:@std/assert@1": "1.0.10",
@@ -28,6 +29,12 @@
     "npm:zod@^3.24.1": "3.24.1"
   },
   "jsr": {
+    "@audacioustux/deepjol@0.1.0": {
+      "integrity": "90a3fdd7c02237e7e912b69ff2608afb43e4e7e9c551bd5ed5feb5ef1b18ac3a",
+      "dependencies": [
+        "jsr:@rambda/rambda"
+      ]
+    },
     "@rambda/rambda@9.4.2": {
       "integrity": "c1b5e092cc0bc4fd486dcbeb3809c6700840e5b5db79b1dd28e3db20f5b49bcf"
     },
