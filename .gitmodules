@@ -1,0 +1,3 @@
+[submodule "deno/deepjol"]
+	path = deno/deepjol
+	url = https://github.com/audacioustux/deepjol.git
