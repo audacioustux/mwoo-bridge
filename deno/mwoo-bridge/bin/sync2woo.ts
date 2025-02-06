@@ -2,7 +2,11 @@ import { z } from "zod";
 import { deepDiff } from "deepjol";
 import * as R from "https://deno.land/x/rambda@9.4.2/mod.ts";
 import * as moo from "../services/moo.ts";
-import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
+import {
+  DOMParser,
+  Element,
+  Node,
+} from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
 
 const { warn } = console;
 
@@ -10,12 +14,18 @@ function toCourseCid(courseid: number) {
   return `C${courseid.toString().padStart(3, "0")}`;
 }
 
+function getNodeTextContent(node: Node): string {
+  return node.nodeType === Node.TEXT_NODE
+    ? node.nodeValue || ""
+    : Array.from(node.childNodes).map(getNodeTextContent).join("");
+}
+
 if (import.meta.main) {
   const mooCategories = await moo.api.core.course.getCategories()
     .then(moo.buildCategoryTree);
 
   const mooFilteredCategories = mooCategories.filter((cat) =>
-    ["Live Online Courses", "On-Campus Courses"].includes(cat.name)
+    ["Live-Online Courses", "On-Campus Courses"].includes(cat.name)
   )
     .map((cat) => {
       const getAllCategoryIds = (categories: moo.CategoryTree[]): number[] =>
@@ -50,7 +60,9 @@ if (import.meta.main) {
       )
     );
 
-  for await (const course of mooCourses.slice(1, 2)) {
+  for await (const course of mooCourses) {
+    if (course.id !== 39) continue;
+
     const courseContents = await moo.api.core.course.getContents({
       courseid: course.id,
     })
@@ -121,8 +133,11 @@ if (import.meta.main) {
         return;
       }
 
-      const title = noOverflowDiv.querySelector("p > strong")?.innerText;
-      const list = Array.from(noOverflowDiv.querySelectorAll("ul > li"))
+      const title = noOverflowDiv.querySelector(":scope > p > strong")
+        ?.innerText;
+      const list = Array.from(
+        noOverflowDiv.querySelectorAll(":scope > ul > li"),
+      )
         .map((li) => li.innerHTML.trim()).filter(R.isNotEmpty);
       return { ...R.pick(["name"], module), title, list };
     };
@@ -133,7 +148,62 @@ if (import.meta.main) {
     }
 
     const introduction = introSection.modules.map(toListModule);
-    const introIndex = R.indexBy(R.prop("name"), introduction);
-    console.log(introIndex);
+
+    if (!tocSection) {
+      warn(`Course ${course.id}: missing Table of Contents section`);
+      continue;
+    }
+    const toc = tocSection.modules.map((module) => {
+      const { name, description } = module;
+      if (!description) {
+        warn(`Course ${course.id}: missing description in ${name}`);
+        return;
+      }
+      const dom = new DOMParser().parseFromString(description, "text/html");
+      // there should be a single div with no-overflow class
+      const noOverflowDiv = dom.querySelector("body > .no-overflow");
+      if (!noOverflowDiv) {
+        warn(`Course ${course.id}: missing no-overflow div in Introduction`);
+        return;
+      }
+
+      interface Outline {
+        title?: string;
+        children?: Outline[];
+      }
+
+      function buildOutline(
+        parent: Element,
+      ): Outline[] | undefined {
+        const ul = parent.querySelector(":scope > ul");
+        if (!ul) return;
+
+        return Array.from(ul.children).map((li) => {
+          const title = li.querySelector(":scope > strong")?.innerText ||
+            getNodeTextContent(li);
+          const children = buildOutline(li);
+          return { title, children };
+        });
+      }
+
+      const outline = buildOutline(noOverflowDiv);
+
+      return { ...R.pick(["name"], module), outline };
+    });
+
+    const canonicalizedCourse = {
+      id: course.id,
+      name: course.fullname,
+      introduction,
+      toc,
+    };
+
+    // save canonicalized course to a file
+    const courseCid = toCourseCid(course.id);
+    const coursePath = `./courses/${courseCid}.json`;
+    await Deno.writeTextFile(
+      coursePath,
+      JSON.stringify(canonicalizedCourse, null, 2),
+    );
   }
 }
