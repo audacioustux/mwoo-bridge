@@ -1,3 +1,5 @@
+import { requireEnv } from "../utils/index.ts";
+
 interface WordpressApiOptions {
   url: string;
   username: string;
@@ -33,9 +35,9 @@ class WordpressApi {
 }
 
 const wp = new WordpressApi({
-  url: Deno.env.get("WP_URL")!,
-  username: Deno.env.get("WP_USERNAME")!,
-  password: Deno.env.get("WP_PASSWORD")!,
+  url: requireEnv("WP_URL"),
+  username: requireEnv("WP_USERNAME"),
+  password: requireEnv("WP_PASSWORD"),
   version: "wp/v2",
 });
 

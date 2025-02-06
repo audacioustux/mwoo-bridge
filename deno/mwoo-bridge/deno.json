@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "bin:canonicalize": "deno run -A --env-file --watch bin/canonicalize.ts"
+    "sync:woo": "deno run -A --env-file --watch bin/sync2woo.ts",
+    "test": "deno test -A --env-file"
   },
   "imports": {
     "@minify-html/wasm": "npm:@minify-html/wasm@^0.15.0",

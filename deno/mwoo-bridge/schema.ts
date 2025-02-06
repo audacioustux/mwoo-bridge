@@ -69,34 +69,6 @@ export const wooProduct = z.object({
   _links: z.unknown(),
 });
 
-export const mooCourse = z.object({
-  id: z.number(),
-  fullname: z.string(),
-  displayname: z.string(),
-  shortname: z.string(),
-  courseimage: z.string().url(),
-  categoryid: z.number(),
-  categoryname: z.string(),
-  sortorder: z.number(),
-  summary: z.string(),
-  summaryformat: z.number(),
-  summaryfiles: z.array(z.any()), // Assuming it can be an array of any type
-  overviewfiles: z.array(
-    z.object({
-      filename: z.string(),
-      filepath: z.string(),
-      filesize: z.number(),
-      fileurl: z.string().url(),
-      timemodified: z.number(),
-      mimetype: z.string(),
-    }),
-  ),
-  showactivitydates: z.boolean(),
-  showcompletionconditions: z.boolean(),
-  contacts: z.array(z.any()), // Assuming contacts can be an array of any type
-  enrollmentmethods: z.array(z.string()),
-});
-
 export const wooOrder = z.object({
   id: z.number(),
   parent_id: z.number(),

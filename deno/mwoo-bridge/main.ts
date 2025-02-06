@@ -1,13 +1,13 @@
-import { moo } from "./services/moo.ts";
+import { api as moo } from "./services/moo.ts";
 import { woo } from "./services/woo.ts";
 import { IMoodleCategory } from "npm:@webhare/moodle-webservice";
 import {
-  mooCourse,
   mooCourseContent,
   wooOrder,
   wooProduct,
   wooProductCategory,
 } from "./schema.ts";
+import { searchCoursesSchema } from "./services/moo.ts";
 import * as R from "https://deno.land/x/rambda@9.4.2/mod.ts";
 import z from "npm:zod";
 // import { JSDOM } from "npm:jsdom";
@@ -364,10 +364,7 @@ if (import.meta.main) {
     criteriavalue: "*",
   }).then(
     (response: unknown) => {
-      const schema = z.object({
-        total: z.number(),
-        courses: z.array(mooCourse),
-      });
+      const schema = searchCoursesSchema;
       return schema.parse(response);
     },
   );
