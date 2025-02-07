@@ -7,6 +7,17 @@ import {
   Element,
   Node,
 } from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
+import { unescape } from "@es-toolkit/es-toolkit";
+import { moduleInterop } from "npm:@textlint/module-interop";
+import {
+  createLinter,
+  loadFixerFormatter,
+  loadLinterFormatter,
+} from "npm:textlint";
+import { TextlintKernelDescriptor } from "npm:@textlint/kernel";
+import markdownProcessor from "npm:@textlint/textlint-plugin-markdown";
+import htmlProcessor from "textlint-plugin-html";
+import textlineDoubledSpaces from "textlint-rule-doubled-spaces";
 
 const { warn } = console;
 
@@ -14,13 +25,50 @@ function toCourseCid(courseid: number) {
   return `C${courseid.toString().padStart(3, "0")}`;
 }
 
-function getNodeTextContent(node: Node): string {
-  return node.nodeType === Node.TEXT_NODE
-    ? node.nodeValue || ""
-    : Array.from(node.childNodes).map(getNodeTextContent).join("");
+function getNodeTextContent(element: Element): string {
+  return Array.from(element.childNodes).filter(
+    (node) => node.nodeType === Node.TEXT_NODE,
+  ).map((node) => node.textContent).join("").trim();
 }
 
 if (import.meta.main) {
+  const descriptor = new TextlintKernelDescriptor({
+    rules: [
+      {
+        ruleId: "doubled-spaces",
+        rule: moduleInterop(textlineDoubledSpaces),
+      },
+    ],
+    plugins: [
+      {
+        pluginId: "@textlint/markdown",
+        plugin: markdownProcessor.default,
+        options: {
+          extensions: ".md",
+        },
+      },
+      {
+        pluginId: "@textlint/html",
+        plugin: htmlProcessor,
+        options: {
+          extensions: ".html",
+        },
+      },
+    ],
+    filterRules: [],
+  });
+
+  const linter = createLinter({ descriptor });
+  const formatter = await loadLinterFormatter({ formatterName: "stylish" });
+  const results = await Promise.all([
+    "<p>TODO: ad  d markdown  content here</p>",
+    "<span>TODO: add html   content here</span>",
+  ].flatMap((content) => linter.lintText(content, "_.html")));
+
+  console.log(formatter.format(results));
+}
+
+if (!import.meta.main) {
   const mooCategories = await moo.api.core.course.getCategories()
     .then(moo.buildCategoryTree);
 
@@ -191,15 +239,19 @@ if (import.meta.main) {
       return { ...R.pick(["name"], module), outline };
     });
 
+    const courseCid = toCourseCid(course.id);
+
     const canonicalizedCourse = {
       id: course.id,
+      cid: courseCid,
       name: course.fullname,
+      tagline: course.summary,
+      summary: introSection.summary.replace(/[\r\n]/g, ""),
       introduction,
       toc,
     };
 
     // save canonicalized course to a file
-    const courseCid = toCourseCid(course.id);
     const coursePath = `./courses/${courseCid}.json`;
     await Deno.writeTextFile(
       coursePath,
