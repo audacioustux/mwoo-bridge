@@ -1,25 +1,25 @@
 import { z } from "zod";
-import { deepDiff } from "deepjol";
 import * as R from "https://deno.land/x/rambda@9.4.2/mod.ts";
 import * as moo from "../services/moo.ts";
+import { deepDiff } from "deepjol";
 import {
   DOMParser,
   Element,
   Node,
 } from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
-import { unescape } from "@es-toolkit/es-toolkit";
-import { moduleInterop } from "npm:@textlint/module-interop";
+import { linter } from "../utils/index.ts";
 import {
-  createLinter,
-  loadFixerFormatter,
-  loadLinterFormatter,
-} from "npm:textlint";
-import { TextlintKernelDescriptor } from "npm:@textlint/kernel";
-import markdownProcessor from "npm:@textlint/textlint-plugin-markdown";
-import htmlProcessor from "textlint-plugin-html";
-import textlineDoubledSpaces from "textlint-rule-doubled-spaces";
+  woo,
+  wooProductSchema,
+  wooProductsSchema,
+  wooTagSchema,
+  wooTagsSchema,
+} from "../services/woo.ts";
+import { encodeHex } from "jsr:@std/encoding/hex";
 
 const { warn } = console;
+
+const encoder = new TextEncoder();
 
 function toCourseCid(courseid: number) {
   return `C${courseid.toString().padStart(3, "0")}`;
@@ -31,48 +31,98 @@ function getNodeTextContent(element: Element): string {
   ).map((node) => node.textContent).join("").trim();
 }
 
-if (import.meta.main) {
-  const descriptor = new TextlintKernelDescriptor({
-    rules: [
-      {
-        ruleId: "doubled-spaces",
-        rule: moduleInterop(textlineDoubledSpaces),
-      },
-    ],
-    plugins: [
-      {
-        pluginId: "@textlint/markdown",
-        plugin: markdownProcessor.default,
-        options: {
-          extensions: ".md",
-        },
-      },
-      {
-        pluginId: "@textlint/html",
-        plugin: htmlProcessor,
-        options: {
-          extensions: ".html",
-        },
-      },
-    ],
-    filterRules: [],
+async function syncMedia(
+  sourceUrl: string,
+  name?: string,
+  caption?: string,
+  description?: string,
+): Promise<{ id: number } | undefined> {
+  // const apiUrl = "https://staging.jobready.global/wp-json/wp/v2/media";
+  const apiUrl = Deno.env.get("WP_URL") + "/wp-json/wp/v2/media";
+  const username = Deno.env.get("WP_USERNAME");
+  const password = Deno.env.get("WP_PASSWORD");
+
+  const credentials = btoa(`${username}:${password}`);
+
+  const headers = new Headers();
+  headers.set("Authorization", `Basic ${credentials}`);
+
+  const imageSlug = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(sourceUrl),
+  )
+    .then(encodeHex)
+    .then((digest) => `moo_${digest}`);
+
+  const params = new URLSearchParams();
+  params.set("slug", imageSlug);
+  params.set(
+    "_fields",
+    "id,title,slug,alt_text,caption,description,date,source_url",
+  );
+
+  const existingImage = await fetch(apiUrl + "?" + params.toString(), {
+    headers,
+  }).then(
+    (response) => response.json(),
+  ).then(
+    (response) => {
+      const schema = z.array(z.object({
+        slug: z.string(),
+        id: z.number(),
+      }));
+      return schema.parse(response);
+    },
+  ).then(
+    (response) => response.filter((image) => image.slug === imageSlug),
+  );
+
+  if (existingImage.length > 0) {
+    return existingImage[0];
+  }
+
+  // https://developer.wordpress.org/rest-api/reference/media/#create-a-media-item
+  const formDataEntries = {
+    file: await fetch(sourceUrl).then((response) => response.blob()),
+    title: name ?? imageSlug,
+    slug: imageSlug,
+    status: "publish",
+    comment_status: "closed",
+    ping_status: "closed",
+    alt_text: name ?? caption ?? "",
+    caption: caption ?? name ?? "",
+    description: description ?? "",
+  };
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(formDataEntries)) {
+    formData.append(key, value);
+  }
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers,
+    body: formData,
   });
 
-  const linter = createLinter({ descriptor });
-  const formatter = await loadLinterFormatter({ formatterName: "stylish" });
-  const results = await Promise.all([
-    "<p>TODO: ad  d markdown  content here</p>",
-    "<span>TODO: add html   content here</span>",
-  ].flatMap((content) => linter.lintText(content, "_.html")));
-
-  console.log(formatter.format(results));
+  if (response.ok) {
+    const result = await response.json();
+    console.debug("created image:", R.pick(["id"], result));
+    return result;
+  } else {
+    console.error(
+      "Failed to create media:",
+      response.status,
+      await response.text(),
+    );
+  }
 }
 
-if (!import.meta.main) {
-  const mooCategories = await moo.api.core.course.getCategories()
-    .then(moo.buildCategoryTree);
+if (import.meta.main) {
+  const mooCategories = await moo.api.core.course.getCategories();
+  const mooCategoryTree = moo.buildCategoryTree(mooCategories);
+  const mooCategoriesByIndex = R.indexBy(R.prop("id"), mooCategories);
 
-  const mooFilteredCategories = mooCategories.filter((cat) =>
+  const mooFilteredCategories = mooCategoryTree.filter((cat) =>
     ["Live-Online Courses", "On-Campus Courses"].includes(cat.name)
   )
     .map((cat) => {
@@ -108,8 +158,41 @@ if (!import.meta.main) {
       )
     );
 
+  const wooTags = await Promise.all(
+    ["Live-Online", "On-Campus", "Self-Paced"].map(async (tag) => {
+      const slug = tag.toLowerCase();
+
+      const existingTag =
+        await (woo.get("products/tags", { slug }) as Promise<unknown>)
+          .then((response: unknown) => {
+            return z.object({ data: wooTagsSchema })
+              .parse(response).data[0];
+          });
+
+      if (existingTag) return existingTag;
+
+      return await (woo.post("products/tags", {
+        name: tag,
+        slug,
+      }) as Promise<unknown>)
+        .then((response: unknown) =>
+          z.object({ data: wooTagSchema })
+            .parse(response).data
+        );
+    }),
+  );
+  const wooTagsBySlug = R.indexBy(R.prop("slug"), wooTags);
+
   for await (const course of mooCourses) {
-    if (course.id !== 39) continue;
+    // if (course.id !== 39) continue;
+
+    // // save course in json file
+    // Deno.writeTextFile(
+    //   `${toCourseCid(course.id)}.json`,
+    //   JSON.stringify(course, null, 2),
+    // );
+
+    const courseCid = toCourseCid(course.id);
 
     const courseContents = await moo.api.core.course.getContents({
       courseid: course.id,
@@ -123,7 +206,7 @@ if (!import.meta.main) {
     );
     if (missingSections.length) {
       warn(
-        `Course ${course.id}: missing sections`,
+        `Course ${courseCid}: missing sections`,
         missingSections,
       );
     }
@@ -143,7 +226,7 @@ if (!import.meta.main) {
       );
       if (missingModules.length) {
         warn(
-          `Course ${course.id}: missing modules in ${introSection.name} section`,
+          `Course ${courseCid}: missing modules in ${introSection.name} section`,
           missingModules,
         );
       }
@@ -160,24 +243,31 @@ if (!import.meta.main) {
       );
       if (missingModules.length) {
         warn(
-          `Course ${course.id}: missing modules in ${tocSection.name} section`,
+          `Course ${courseCid}: missing modules in ${tocSection.name} section`,
           missingModules,
         );
       }
     }
 
+    interface ListModule {
+      name: string;
+      title?: string;
+      list: string[];
+    }
     // canonicalize course module as ListModule (having only a title and a list)
-    const toListModule = (module: z.infer<typeof moo.courseModuleSchema>) => {
+    const toListModule = (
+      module: z.infer<typeof moo.courseModuleSchema>,
+    ): ListModule | undefined => {
       const { description } = module;
       if (!description) {
-        warn(`Course ${course.id}: missing description in ${module.name}`);
+        warn(`Course ${courseCid}: missing description in ${module.name}`);
         return;
       }
       const dom = new DOMParser().parseFromString(description, "text/html");
       // there should be a single div with no-overflow class
       const noOverflowDiv = dom.querySelector("body > .no-overflow");
       if (!noOverflowDiv) {
-        warn(`Course ${course.id}: missing no-overflow div in Introduction`);
+        warn(`Course ${courseCid}: missing no-overflow div in Introduction`);
         return;
       }
 
@@ -191,27 +281,28 @@ if (!import.meta.main) {
     };
 
     if (!introSection) {
-      warn(`Course ${course.id}: missing Introduction section`);
+      warn(`Course ${courseCid}: missing Introduction section`);
       continue;
     }
-
-    const introduction = introSection.modules.map(toListModule);
+    const introduction = introSection.modules.map(toListModule)
+      .filter(R.isNotNil);
 
     if (!tocSection) {
-      warn(`Course ${course.id}: missing Table of Contents section`);
+      warn(`Course ${courseCid}: missing Table of Contents section`);
       continue;
     }
-    const toc = tocSection.modules.map((module) => {
+
+    const toTocModule = (module: z.infer<typeof moo.courseModuleSchema>) => {
       const { name, description } = module;
       if (!description) {
-        warn(`Course ${course.id}: missing description in ${name}`);
+        warn(`Course ${courseCid}: missing description in ${name}`);
         return;
       }
       const dom = new DOMParser().parseFromString(description, "text/html");
       // there should be a single div with no-overflow class
       const noOverflowDiv = dom.querySelector("body > .no-overflow");
       if (!noOverflowDiv) {
-        warn(`Course ${course.id}: missing no-overflow div in Introduction`);
+        warn(`Course ${courseCid}: missing no-overflow div in Introduction`);
         return;
       }
 
@@ -237,9 +328,8 @@ if (!import.meta.main) {
       const outline = buildOutline(noOverflowDiv);
 
       return { ...R.pick(["name"], module), outline };
-    });
-
-    const courseCid = toCourseCid(course.id);
+    };
+    const toc = tocSection.modules.map(toTocModule).filter(R.isNotNil);
 
     const canonicalizedCourse = {
       id: course.id,
@@ -251,11 +341,145 @@ if (!import.meta.main) {
       toc,
     };
 
-    // save canonicalized course to a file
-    const coursePath = `./courses/${courseCid}.json`;
-    await Deno.writeTextFile(
-      coursePath,
-      JSON.stringify(canonicalizedCourse, null, 2),
+    const product =
+      await (woo.get("products", { sku: courseCid }) as Promise<unknown>)
+        .then((response: unknown) =>
+          z.object({ data: wooProductsSchema })
+            .parse(response).data[0]
+        );
+
+    const productimage = await syncMedia(
+      course.courseimage,
+      name,
+      course.shortname,
+      course.summary,
     );
+
+    const toAcfRepeater = (
+      listModule: ListModule,
+      repeaterName: string,
+      listName: string,
+    ) => {
+      return listModule.list.map((item, index) => ({
+        key: `${repeaterName}_${index}_${listName}`,
+        value: item,
+      })).concat({
+        key: repeaterName,
+        value: listModule.list.length.toString(),
+      });
+    };
+
+    const why_do_this_course = canonicalizedCourse.introduction
+      .find((m) => m.name === "এই কোর্সটি কেন করবেন?");
+    const learning_outcomes = canonicalizedCourse.introduction
+      .find((m) => m.name === "কোর্সটি করে যা শিখবেন");
+    const who_is_this_course_for = canonicalizedCourse.introduction
+      .find((m) => m.name === "এই কোর্সটি যাদের জন্য");
+    const material_include = canonicalizedCourse.introduction
+      .find((m) => m.name === "এই কোর্সে আপনি যা যা পাবেন");
+    const prerequisite = canonicalizedCourse.introduction
+      .find((m) => m.name === "এই কোর্স করতে কি কি লাগবে");
+
+    const categoryTags = mooCategoriesByIndex[course.categoryid].path.split("/")
+      .slice(1)
+      .map((cat) => parseInt(cat, 10))
+      .map((cat) => mooCategoriesByIndex[cat])
+      .filter((cat) => R.isNotEmpty(cat.idnumber))
+      .map((cat) => ({
+        [cat.idnumber]: { name: cat.name, description: cat.description },
+      }))
+      .reduce((acc, val) => ({ ...acc, ...val }), {});
+
+    const tags = Object.keys(categoryTags).map((key) =>
+      R.pick(["id"], wooTagsBySlug[key])
+    );
+
+    const productFields: Partial<z.infer<typeof wooProductSchema>> = {
+      name: canonicalizedCourse.name,
+      sku: courseCid,
+      images: productimage ? [{ id: productimage.id }] : [],
+      tags,
+      meta_data: [
+        ...Object.entries({
+          course_description: canonicalizedCourse.summary,
+          "sub-headingtagline": canonicalizedCourse.tagline,
+        }).map(([key, value]) => ({ key, value })),
+        ...why_do_this_course
+          ? toAcfRepeater(
+            why_do_this_course,
+            "why_do_this_course",
+            "benefits_from_this_course_list",
+          )
+          : [],
+        ...learning_outcomes
+          ? toAcfRepeater(
+            learning_outcomes,
+            "learning_outcomes",
+            "learning_outcome_list",
+          )
+          : [],
+        ...who_is_this_course_for
+          ? toAcfRepeater(
+            who_is_this_course_for,
+            "who_is_this_course_for",
+            "list",
+          )
+          : [],
+        ...material_include
+          ? toAcfRepeater(
+            material_include,
+            "material_include",
+            "list",
+          )
+          : [],
+        ...prerequisite
+          ? toAcfRepeater(
+            prerequisite,
+            "prerequisite",
+            "list",
+          )
+          : [],
+      ],
+    };
+
+    if (product) {
+      const diff = deepDiff(product, productFields, {
+        meta_data: { unique_by: "key" },
+        images: { unique_by: "id" },
+        tags: { unique_by: "id" },
+        default: {
+          ignore_missing: true,
+        },
+      });
+
+      if (R.isNotEmpty(diff)) {
+        await (woo.put(`products/${product.id}`, {
+          ...productFields,
+        }) as Promise<unknown>)
+          .then((response: unknown) => {
+            return z.object({ data: wooProductSchema })
+              .parse(response).data;
+          });
+        console.info(
+          `Course ${courseCid}: updated in WooCommerce with diff`,
+          diff,
+        );
+      } else {
+        console.info(`Course ${courseCid}: already up-to-date`);
+      }
+    } else {
+      await (woo.post("products", {
+        ...productFields,
+        type: "simple",
+        status: "private",
+        virtual: true,
+        sold_individually: true,
+      }) as Promise<unknown>)
+        .then((response: unknown) =>
+          z.object({ data: wooProductsSchema })
+            .parse(response).data[0]
+        );
+      console.info(`Course ${courseCid}: added to WooCommerce`);
+    }
   }
 }

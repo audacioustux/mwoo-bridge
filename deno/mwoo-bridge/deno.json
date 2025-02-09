@@ -16,6 +16,7 @@
     "jsdom": "npm:jsdom@^26.0.0",
     "minify": "npm:minify@^12.0.1",
     "ramda": "npm:ramda@^0.30.1",
+    "slugify": "npm:slugify@^1.6.6",
     "textlint-plugin-html": "npm:textlint-plugin-html@^1.0.1",
     "textlint-rule-doubled-spaces": "npm:textlint-rule-doubled-spaces@^1.0.2",
     "zod": "npm:zod@^3.24.1",
