@@ -196,31 +196,6 @@ if (import.meta.main) {
       )
     );
 
-  // const wooTags = await Promise.all(
-  //   ["Live-Online", "On-Campus", "Self-Paced"].map(async (tag) => {
-  //     const slug = tag.toLowerCase();
-
-  //     const existingTag =
-  //       await (woo.get("products/tags", { slug }) as Promise<unknown>)
-  //         .then((response: unknown) => {
-  //           return z.object({ data: wooTagsSchema })
-  //             .parse(response).data[0];
-  //         });
-
-  //     if (existingTag) return existingTag;
-
-  //     return await (woo.post("products/tags", {
-  //       name: tag,
-  //       slug,
-  //     }) as Promise<unknown>)
-  //       .then((response: unknown) =>
-  //         z.object({ data: wooTagSchema })
-  //           .parse(response).data
-  //       );
-  //   }),
-  // );
-  // const wooTagsBySlug = R.indexBy(R.prop("slug"), wooTags);
-
   for await (const course of mooCourses) {
     // if (course.id !== 39) continue;
 
