@@ -75,7 +75,6 @@ async function syncMedia(
   caption?: string,
   description?: string,
 ): Promise<{ id: number } | undefined> {
-  // const apiUrl = "https://staging.jobready.global/wp-json/wp/v2/media";
   const apiUrl = Deno.env.get("WP_URL") + "/wp-json/wp/v2/media";
   const username = Deno.env.get("WP_USERNAME");
   const password = Deno.env.get("WP_PASSWORD");
