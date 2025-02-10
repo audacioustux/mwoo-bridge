@@ -442,42 +442,30 @@ if (import.meta.main) {
             tag.slug.startsWith("delivery_method")
           )?.name,
         }).map(([key, value]) => ({ key, value })),
-        ...why_do_this_course
-          ? toAcfRepeater(
-            why_do_this_course,
-            "why_do_this_course",
-            "benefits_from_this_course_list",
-          )
-          : [],
-        ...learning_outcomes
-          ? toAcfRepeater(
-            learning_outcomes,
-            "learning_outcomes",
-            "learning_outcome_list",
-          )
-          : [],
-        ...who_is_this_course_for
-          ? toAcfRepeater(
-            who_is_this_course_for,
-            "who_is_this_course_for",
-            "list",
-          )
-          : [],
-        ...material_include
-          ? toAcfRepeater(
-            material_include,
-            "material_include",
-            "list",
-          )
-          : [],
-        ...prerequisite
-          ? toAcfRepeater(
-            prerequisite,
-            "prerequisite",
-            "list",
-          )
-          : [],
-      ],
+      ]
+        .concat(
+          [
+            {
+              data: why_do_this_course,
+              name: "why_do_this_course",
+              key: "benefits_from_this_course_list",
+            },
+            {
+              data: learning_outcomes,
+              name: "learning_outcomes",
+              key: "learning_outcome_list",
+            },
+            {
+              data: who_is_this_course_for,
+              name: "who_is_this_course_for",
+              key: "list",
+            },
+            { data: material_include, name: "material_include", key: "list" },
+            { data: prerequisite, name: "prerequisite", key: "list" },
+          ].map(({ data, name, key }) =>
+            data ? toAcfRepeater(data, name, key) : []
+          ).flat(),
+        ),
     };
 
     if (product) {
