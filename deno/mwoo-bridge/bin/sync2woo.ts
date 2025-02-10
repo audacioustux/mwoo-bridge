@@ -445,7 +445,6 @@ if (import.meta.main) {
         ...Object.entries({
           course_description: canonicalizedCourse.summary,
           "sub-headingtagline": canonicalizedCourse.tagline,
-          // find with slug starts with delivery_method
           delivery_method: tags.find((tag) =>
             tag.slug.startsWith("delivery_method")
           )?.name,
