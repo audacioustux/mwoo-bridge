@@ -19,13 +19,28 @@ import {
 } from "../services/woo.ts";
 import { encodeHex } from "jsr:@std/encoding/hex";
 import slugify from "npm:slugify";
+import { from, mergeMap } from "rxjs";
 
 const { warn } = console;
 
 const encoder = new TextEncoder();
 
+function processInParallel<T, R>(
+  items: T[],
+  concurrency: number,
+  processor: (item: T) => Promise<R>,
+) {
+  return from(items).pipe(
+    mergeMap((item) => from(processor(item)), concurrency),
+  );
+}
+
 function toCourseCid(courseid: number) {
   return `C${courseid.toString().padStart(3, "0")}`;
+}
+
+function toDom(html: string) {
+  return new DOMParser().parseFromString(html, "text/html");
 }
 
 function getNodeTextContent(element: Element): string {
@@ -174,36 +189,18 @@ if (import.meta.main) {
       return getAllCategoryIds([cat]);
     });
 
-  const mooCourses = await moo.api.core.course.getCourses({}).then(
-    moo.getCoursesSchema.parse,
-  )
-    .then((courses) =>
-      courses.filter((course) =>
-        mooFilteredCategories.flat().includes(course.categoryid)
-      )
-    )
-    .then((courses) =>
-      courses.map((course) =>
-        moo.api.core.course.getCoursesByField({
-          // @ts-ignore - field can be id/s, shortname, idnumber, category
-          field: "id",
-          value: course.id,
-        })
-          .then(moo.getCoursesByFieldSchema.parse)
-          .then(({ courses }) => courses[0])
-          .then((courseDetails) => R.merge(course, courseDetails))
-      )
-    );
+  const mooCourses = await Promise.all(
+    mooFilteredCategories.flat().map(async (category) => {
+      return await moo.api.core.course.getCoursesByField({
+        field: "category",
+        value: category,
+      })
+        .then(moo.getCoursesByFieldSchema.parse)
+        .then(({ courses }) => courses);
+    }),
+  ).then((courses) => courses.flat());
 
-  for await (const course of mooCourses) {
-    // if (course.id !== 39) continue;
-
-    // // save course in json file
-    // Deno.writeTextFile(
-    //   `${toCourseCid(course.id)}.json`,
-    //   JSON.stringify(course, null, 2),
-    // );
-
+  processInParallel(mooCourses, 10, async (course) => {
     const courseCid = toCourseCid(course.id);
 
     const courseContents = await moo.api.core.course.getContents({
@@ -275,7 +272,7 @@ if (import.meta.main) {
         warn(`Course ${courseCid}: missing description in ${module.name}`);
         return;
       }
-      const dom = new DOMParser().parseFromString(description, "text/html");
+      const dom = toDom(description);
       // there should be a single div with no-overflow class
       const noOverflowDiv = dom.querySelector("body > .no-overflow");
       if (!noOverflowDiv) {
@@ -294,14 +291,12 @@ if (import.meta.main) {
 
     if (!introSection) {
       warn(`Course ${courseCid}: missing Introduction section`);
-      continue;
     }
-    const introduction = introSection.modules.map(toListModule)
+    const introduction = introSection?.modules.map(toListModule)
       .filter(R.isNotNil);
 
     if (!tocSection) {
       warn(`Course ${courseCid}: missing Table of Contents section`);
-      continue;
     }
 
     const toTocModule = (module: z.infer<typeof moo.courseModuleSchema>) => {
@@ -310,7 +305,7 @@ if (import.meta.main) {
         warn(`Course ${courseCid}: missing description in ${name}`);
         return;
       }
-      const dom = new DOMParser().parseFromString(description, "text/html");
+      const dom = toDom(description);
       // there should be a single div with no-overflow class
       const noOverflowDiv = dom.querySelector("body > .no-overflow");
       if (!noOverflowDiv) {
@@ -341,14 +336,14 @@ if (import.meta.main) {
 
       return { ...R.pick(["name"], module), outline };
     };
-    const toc = tocSection.modules.map(toTocModule).filter(R.isNotNil);
+    const toc = tocSection?.modules.map(toTocModule).filter(R.isNotNil);
 
     const canonicalizedCourse = {
       id: course.id,
       cid: courseCid,
       name: course.fullname,
-      tagline: course.summary,
-      summary: introSection.summary.replace(/[\r\n]/g, ""),
+      tagline: toDom(course.summary).querySelector("p")?.innerText,
+      summary: introSection?.summary.replace(/[\r\n]/g, ""),
       introduction,
       toc,
     };
@@ -359,11 +354,6 @@ if (import.meta.main) {
           z.object({ data: wooProductsSchema })
             .parse(response).data[0]
         );
-    // // save course in json file
-    // Deno.writeTextFile(
-    //   `${toCourseCid(course.id)}.json`,
-    //   JSON.stringify(product, null, 2),
-    // );
 
     const productimage = await syncMedia(
       course.courseimage,
@@ -386,16 +376,21 @@ if (import.meta.main) {
       });
     };
 
-    const why_do_this_course = canonicalizedCourse.introduction
-      .find((m) => m.name === "এই কোর্সটি কেন করবেন?");
-    const learning_outcomes = canonicalizedCourse.introduction
-      .find((m) => m.name === "কোর্সটি করে যা শিখবেন");
-    const who_is_this_course_for = canonicalizedCourse.introduction
-      .find((m) => m.name === "এই কোর্সটি যাদের জন্য");
-    const material_include = canonicalizedCourse.introduction
-      .find((m) => m.name === "এই কোর্সে আপনি যা যা পাবেন");
-    const prerequisite = canonicalizedCourse.introduction
-      .find((m) => m.name === "এই কোর্স করতে কি কি লাগবে");
+    const why_do_this_course = canonicalizedCourse.introduction?.find((m) =>
+      m.name === "এই কোর্সটি কেন করবেন?"
+    );
+    const learning_outcomes = canonicalizedCourse.introduction?.find((m) =>
+      m.name === "কোর্সটি করে যা শিখবেন"
+    );
+    const who_is_this_course_for = canonicalizedCourse.introduction?.find((m) =>
+      m.name === "এই কোর্সটি যাদের জন্য"
+    );
+    const material_include = canonicalizedCourse.introduction?.find((m) =>
+      m.name === "এই কোর্সে আপনি যা যা পাবেন"
+    );
+    const prerequisite = canonicalizedCourse.introduction?.find((m) =>
+      m.name === "এই কোর্স করতে কি কি লাগবে"
+    );
 
     const mooCategory = mooCategoriesByIndex[course.categoryid];
 
@@ -404,13 +399,11 @@ if (import.meta.main) {
       .map((cat) => parseInt(cat, 10))
       .map((cat) => mooCategoriesByIndex[cat])
       .filter((cat) => R.isNotEmpty(cat.idnumber))
-      // replace : with - in idnumber
       .map((cat) => ({
         ...cat,
         idnumber: cat.idnumber.replace(":", "-"),
       }))
       .filter((cat) => {
-        // split by - and both part should be ^[a-z0-9_]+$
         const [key, value] = cat.idnumber.split("-");
         if (!/^[a-z0-9_]+$/.test(key) || !/^[a-z0-9_]+$/.test(value)) {
           warn(`Course ${courseCid}: invalid idnumber ${cat.idnumber}`);
@@ -527,5 +520,13 @@ if (import.meta.main) {
         );
       console.info(`Course ${courseCid}: added to WooCommerce`);
     }
-  }
+  })
+    .subscribe({
+      error: (error) => {
+        console.error("Failed to sync course", error);
+      },
+      complete: () => {
+        console.info("Course sync complete");
+      },
+    });
 }
