@@ -32,6 +32,7 @@
     "npm:os@*": "0.1.2",
     "npm:ramda@*": "0.30.1",
     "npm:ramda@~0.30.1": "0.30.1",
+    "npm:slugify@*": "1.6.6",
     "npm:slugify@^1.6.6": "1.6.6",
     "npm:textlint-plugin-html@^1.0.1": "1.0.1",
     "npm:textlint-rule-doubled-spaces@^1.0.2": "1.0.2_textlint@14.4.2",

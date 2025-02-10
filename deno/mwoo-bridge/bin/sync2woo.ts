@@ -10,12 +10,15 @@ import {
 import { linter } from "../utils/index.ts";
 import {
   woo,
+  wooCategoriesSchema,
+  wooCategorySchema,
   wooProductSchema,
   wooProductsSchema,
   wooTagSchema,
   wooTagsSchema,
 } from "../services/woo.ts";
 import { encodeHex } from "jsr:@std/encoding/hex";
+import slugify from "npm:slugify";
 
 const { warn } = console;
 
@@ -29,6 +32,41 @@ function getNodeTextContent(element: Element): string {
   return Array.from(element.childNodes).filter(
     (node) => node.nodeType === Node.TEXT_NODE,
   ).map((node) => node.textContent).join("").trim();
+}
+
+async function syncTag(name: string, slug: string, description: string) {
+  const existingTag = await (woo
+    .get("products/tags", { slug }) as Promise<unknown>)
+    .then((response) =>
+      z.object({ data: wooTagsSchema }).parse(response).data[0] || null
+    );
+
+  if (existingTag) return existingTag;
+
+  return await (woo
+    .post("products/tags", { name, slug, description }) as Promise<
+      unknown
+    >)
+    .then((response) => z.object({ data: wooTagSchema }).parse(response).data);
+}
+
+async function syncCategory(name: string, slug: string, description: string) {
+  const existingCategory = await (woo
+    .get("products/categories", { slug }) as Promise<unknown>)
+    .then((response) => {
+      return z.object({ data: wooCategoriesSchema }).parse(response).data[0] ||
+        null;
+    });
+
+  if (existingCategory) return existingCategory;
+
+  return await (woo
+    .post("products/categories", { name, slug, description }) as Promise<
+      unknown
+    >)
+    .then((response) =>
+      z.object({ data: wooCategorySchema }).parse(response).data
+    );
 }
 
 async function syncMedia(
@@ -123,7 +161,7 @@ if (import.meta.main) {
   const mooCategoriesByIndex = R.indexBy(R.prop("id"), mooCategories);
 
   const mooFilteredCategories = mooCategoryTree.filter((cat) =>
-    ["Live-Online Courses", "On-Campus Courses"].includes(cat.name)
+    ["Live-Online", "On-Campus"].includes(cat.name)
   )
     .map((cat) => {
       const getAllCategoryIds = (categories: moo.CategoryTree[]): number[] =>
@@ -158,30 +196,30 @@ if (import.meta.main) {
       )
     );
 
-  const wooTags = await Promise.all(
-    ["Live-Online", "On-Campus", "Self-Paced"].map(async (tag) => {
-      const slug = tag.toLowerCase();
+  // const wooTags = await Promise.all(
+  //   ["Live-Online", "On-Campus", "Self-Paced"].map(async (tag) => {
+  //     const slug = tag.toLowerCase();
 
-      const existingTag =
-        await (woo.get("products/tags", { slug }) as Promise<unknown>)
-          .then((response: unknown) => {
-            return z.object({ data: wooTagsSchema })
-              .parse(response).data[0];
-          });
+  //     const existingTag =
+  //       await (woo.get("products/tags", { slug }) as Promise<unknown>)
+  //         .then((response: unknown) => {
+  //           return z.object({ data: wooTagsSchema })
+  //             .parse(response).data[0];
+  //         });
 
-      if (existingTag) return existingTag;
+  //     if (existingTag) return existingTag;
 
-      return await (woo.post("products/tags", {
-        name: tag,
-        slug,
-      }) as Promise<unknown>)
-        .then((response: unknown) =>
-          z.object({ data: wooTagSchema })
-            .parse(response).data
-        );
-    }),
-  );
-  const wooTagsBySlug = R.indexBy(R.prop("slug"), wooTags);
+  //     return await (woo.post("products/tags", {
+  //       name: tag,
+  //       slug,
+  //     }) as Promise<unknown>)
+  //       .then((response: unknown) =>
+  //         z.object({ data: wooTagSchema })
+  //           .parse(response).data
+  //       );
+  //   }),
+  // );
+  // const wooTagsBySlug = R.indexBy(R.prop("slug"), wooTags);
 
   for await (const course of mooCourses) {
     // if (course.id !== 39) continue;
@@ -347,6 +385,11 @@ if (import.meta.main) {
           z.object({ data: wooProductsSchema })
             .parse(response).data[0]
         );
+    // // save course in json file
+    // Deno.writeTextFile(
+    //   `${toCourseCid(course.id)}.json`,
+    //   JSON.stringify(product, null, 2),
+    // );
 
     const productimage = await syncMedia(
       course.courseimage,
@@ -380,29 +423,58 @@ if (import.meta.main) {
     const prerequisite = canonicalizedCourse.introduction
       .find((m) => m.name === "এই কোর্স করতে কি কি লাগবে");
 
-    const categoryTags = mooCategoriesByIndex[course.categoryid].path.split("/")
+    const mooCategory = mooCategoriesByIndex[course.categoryid];
+
+    const categoryTags = mooCategory.path.split("/")
       .slice(1)
       .map((cat) => parseInt(cat, 10))
       .map((cat) => mooCategoriesByIndex[cat])
       .filter((cat) => R.isNotEmpty(cat.idnumber))
+      // replace : with - in idnumber
+      .map((cat) => ({
+        ...cat,
+        idnumber: cat.idnumber.replace(":", "-"),
+      }))
+      .filter((cat) => {
+        // split by - and both part should be ^[a-z0-9_]+$
+        const [key, value] = cat.idnumber.split("-");
+        if (!/^[a-z0-9_]+$/.test(key) || !/^[a-z0-9_]+$/.test(value)) {
+          warn(`Course ${courseCid}: invalid idnumber ${cat.idnumber}`);
+          return false;
+        }
+        return true;
+      })
       .map((cat) => ({
         [cat.idnumber]: { name: cat.name, description: cat.description },
       }))
       .reduce((acc, val) => ({ ...acc, ...val }), {});
+    const tags = await Promise.all(
+      Object.entries(categoryTags).map(
+        async ([slug, { name, description }]) =>
+          await syncTag(name, slug, description),
+      ),
+    );
 
-    const tags = Object.keys(categoryTags).map((key) =>
-      R.pick(["id"], wooTagsBySlug[key])
+    const category = await syncCategory(
+      mooCategory.name,
+      slugify.default(mooCategory.name),
+      mooCategory.description,
     );
 
     const productFields: Partial<z.infer<typeof wooProductSchema>> = {
       name: canonicalizedCourse.name,
       sku: courseCid,
       images: productimage ? [{ id: productimage.id }] : [],
-      tags,
+      tags: tags.map((tag) => ({ id: tag.id })),
+      categories: [{ id: category.id }],
       meta_data: [
         ...Object.entries({
           course_description: canonicalizedCourse.summary,
           "sub-headingtagline": canonicalizedCourse.tagline,
+          // find with slug starts with delivery_method
+          delivery_method: tags.find((tag) =>
+            tag.slug.startsWith("delivery_method")
+          )?.name,
         }).map(([key, value]) => ({ key, value })),
         ...why_do_this_course
           ? toAcfRepeater(
@@ -447,6 +519,7 @@ if (import.meta.main) {
         meta_data: { unique_by: "key" },
         images: { unique_by: "id" },
         tags: { unique_by: "id" },
+        categories: { unique_by: "id" },
         default: {
           ignore_missing: true,
         },

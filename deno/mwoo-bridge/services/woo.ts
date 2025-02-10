@@ -90,3 +90,18 @@ export const wooTagSchema = z.object({
 });
 
 export const wooTagsSchema = z.array(wooTagSchema);
+
+export const wooCategorySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  parent: z.number(),
+  description: z.string(),
+  display: z.string(),
+  image: z.unknown(),
+  menu_order: z.number(),
+  count: z.number(),
+  _links: z.unknown(),
+});
+
+export const wooCategoriesSchema = z.array(wooCategorySchema);
