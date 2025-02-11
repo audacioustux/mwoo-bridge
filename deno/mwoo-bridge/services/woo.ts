@@ -73,7 +73,7 @@ export const wooProductSchema = z.object({
   meta_data: z.array(z.object({
     id: z.optional(z.number()),
     key: z.string(),
-    value: z.any(),
+    value: z.union([z.string(), z.array(z.unknown())]),
   })),
   _links: z.unknown(),
 });
