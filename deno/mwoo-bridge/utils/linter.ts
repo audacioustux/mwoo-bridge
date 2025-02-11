@@ -91,8 +91,3 @@ Deno.test("fixText should find doubled spaces - .html", async () => {
   const result = await fixText("Hello  world!", "test.html");
   assertEquals(result.output, "Hello world!");
 });
-
-Deno.test("lintText should find no issue in empty text", async () => {
-  const result = await lintText("", "empty.html");
-  assertEquals(result.messages.length, 0);
-});

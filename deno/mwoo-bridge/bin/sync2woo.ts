@@ -185,6 +185,11 @@ async function syncMedia(
   return null;
 }
 
+interface CourseOutline {
+  title: string;
+  children?: CourseOutline[];
+}
+
 if (import.meta.main) {
   const mooCategories = await moo.api.core.course.getCategories();
   const mooCategoryTree = moo.buildCategoryTree(mooCategories);
@@ -328,14 +333,9 @@ if (import.meta.main) {
           return;
         }
 
-        interface Outline {
-          title?: string;
-          children?: Outline[];
-        }
-
         function buildOutline(
           parent: Element,
-        ): Outline[] | undefined {
+        ): CourseOutline[] | undefined {
           const ul = parent.querySelector(":scope > ul");
           if (!ul) return;
 
@@ -376,20 +376,6 @@ if (import.meta.main) {
         course.shortname,
         course.summary,
       );
-
-      const toAcfRepeater = (
-        listModule: ListModule,
-        repeaterName: string,
-        listName: string,
-      ) => {
-        return listModule.list.map((item, index) => ({
-          key: `${repeaterName}_${index}_${listName}`,
-          value: item,
-        })).concat({
-          key: repeaterName,
-          value: listModule.list.length.toString(),
-        });
-      };
 
       const why_do_this_course = canonicalizedCourse.introduction?.find((m) =>
         m.name === "এই কোর্সটি কেন করবেন?"
@@ -443,44 +429,80 @@ if (import.meta.main) {
         mooCategory.description,
       );
 
+      const courseMetaFields = Object.entries({
+        course_description: canonicalizedCourse.summary || "",
+        "sub-headingtagline": canonicalizedCourse.tagline || "",
+        delivery_method: tags.find((tag) =>
+          tag.slug.startsWith("delivery_method")
+        )?.name || "",
+      }).map(([key, value]) => ({ key, value }));
+
+      const courseIntroMetaFields = [
+        {
+          data: why_do_this_course,
+          name: "why_do_this_course",
+          key: "benefits_from_this_course_list",
+        },
+        {
+          data: learning_outcomes,
+          name: "learning_outcomes",
+          key: "learning_outcome_list",
+        },
+        {
+          data: who_is_this_course_for,
+          name: "who_is_this_course_for",
+          key: "list",
+        },
+        { data: material_include, name: "material_include", key: "list" },
+        { data: prerequisite, name: "prerequisite", key: "list" },
+      ].map(({ data, name, key }) =>
+        data
+          ? data.list.map((item, index) => ({
+            key: `${name}_${index}_${key}`,
+            value: item,
+          })).concat({
+            key: name,
+            value: data.list.length.toString(),
+          })
+          : []
+      ).flat();
+
+      const courseOutline = canonicalizedCourse.toc?.find(({ name }) =>
+        name === "কোর্স ব্রেকডাউন"
+      )?.outline ?? [];
+      const courseOutlineMetaFields = courseOutline.flatMap((module, index) => {
+        const buildUl = (ul: CourseOutline[]): string => {
+          return ul.map((li) =>
+            `<li>${li.title}${
+              li.children ? `<ul>${buildUl(li.children)}</ul>` : ""
+            }</li>`
+          ).join("");
+        };
+        const value = `<ul>${buildUl([module])}</ul>`;
+        return [
+          {
+            key: `course_ouline_${index}_module`,
+            value: module.title,
+          },
+          {
+            key: `course_ouline_${index}_lesson`,
+            value,
+          },
+        ];
+      }).concat({
+        key: "course_ouline",
+        value: courseOutline.length.toString(),
+      });
+
       const productFields: Partial<z.infer<typeof wooProductSchema>> = {
         name: canonicalizedCourse.name,
         sku: courseCid,
         images: productimage ? [{ id: productimage.id }] : [],
         tags: tags.map((tag) => ({ id: tag.id })),
         categories: [{ id: category.id }],
-        meta_data: [
-          ...Object.entries({
-            course_description: canonicalizedCourse.summary || "",
-            "sub-headingtagline": canonicalizedCourse.tagline || "",
-            delivery_method: tags.find((tag) =>
-              tag.slug.startsWith("delivery_method")
-            )?.name || "",
-          }).map(([key, value]) => ({ key, value })),
-        ]
-          .concat(
-            [
-              {
-                data: why_do_this_course,
-                name: "why_do_this_course",
-                key: "benefits_from_this_course_list",
-              },
-              {
-                data: learning_outcomes,
-                name: "learning_outcomes",
-                key: "learning_outcome_list",
-              },
-              {
-                data: who_is_this_course_for,
-                name: "who_is_this_course_for",
-                key: "list",
-              },
-              { data: material_include, name: "material_include", key: "list" },
-              { data: prerequisite, name: "prerequisite", key: "list" },
-            ].map(({ data, name, key }) =>
-              data ? toAcfRepeater(data, name, key) : []
-            ).flat(),
-          ),
+        meta_data: courseMetaFields
+          .concat(courseIntroMetaFields)
+          .concat(courseOutlineMetaFields),
       };
       {
         // lint acf fields of type string
@@ -508,6 +530,10 @@ if (import.meta.main) {
       }
 
       if (product) {
+        Deno.writeTextFile(
+          `./products/${courseCid}.json`,
+          JSON.stringify(product, null, 2),
+        );
         const diff = deepDiff(product, productFields, {
           meta_data: { unique_by: "key" },
           images: { unique_by: "id" },
