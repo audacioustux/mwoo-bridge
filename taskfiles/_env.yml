@@ -24,11 +24,7 @@ tasks:
   install:_:pkgs:
     deps:
       - task: install:mix:pkgs
-      - task: install:bashlet:pkgs
-      - task: install:cargo:pkgs
   install:mix:pkgs: mix archive.install --force hex phx_new
-  install:bashlet:pkgs: bashlet install util/ebort
-  install:cargo:pkgs: cargo install cargo-watch
 
   configure:_:
     desc: Configure development tools
@@ -42,4 +38,3 @@ tasks:
     desc: Update dependencies and build artifacts
     ignore_error: true
     cmds:
-      - task: :cargo:build

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as R from "https://deno.land/x/rambda@9.4.2/mod.ts";
+import * as R from "@rambda/rambda";
 import * as moo from "../services/moo.ts";
 import { deepDiff } from "deepjol";
 import {
@@ -191,7 +191,8 @@ interface CourseOutline {
 }
 
 if (import.meta.main) {
-  const mooCategories = await moo.api.core.course.getCategories();
+  const mooCategories = await moo.api.core.course.getCategories()
+    .then(moo.getCategoriesSchema.parse);
   const mooCategoryTree = moo.buildCategoryTree(mooCategories);
   const mooCategoriesByIndex = R.indexBy(R.prop("id"), mooCategories);
 
@@ -224,8 +225,6 @@ if (import.meta.main) {
     mooCourses,
     1,
     async (course) => {
-      // if (course.id !== 117) return;
-
       const courseCid = toCourseCid(course.id);
 
       const courseContents = await moo.api.core.course.getContents({
@@ -378,19 +377,19 @@ if (import.meta.main) {
       );
 
       const why_do_this_course = canonicalizedCourse.introduction?.find((m) =>
-        m.name === "এই কোর্সটি কেন করবেন?"
+        m?.name === "এই কোর্সটি কেন করবেন?"
       );
       const learning_outcomes = canonicalizedCourse.introduction?.find((m) =>
-        m.name === "কোর্সটি করে যা শিখবেন"
+        m?.name === "কোর্সটি করে যা শিখবেন"
       );
-      const who_is_this_course_for = canonicalizedCourse.introduction?.find((
-        m,
-      ) => m.name === "এই কোর্সটি যাদের জন্য");
+      const who_is_this_course_for = canonicalizedCourse.introduction?.find(
+        (m) => m?.name === "এই কোর্সটি যাদের জন্য",
+      );
       const material_include = canonicalizedCourse.introduction?.find((m) =>
-        m.name === "এই কোর্সে আপনি যা যা পাবেন"
+        m?.name === "এই কোর্সে আপনি যা যা পাবেন"
       );
       const prerequisite = canonicalizedCourse.introduction?.find((m) =>
-        m.name === "এই কোর্স করতে কি কি লাগবে"
+        m?.name === "এই কোর্স করতে কি কি লাগবে"
       );
 
       const mooCategory = mooCategoriesByIndex[course.categoryid];
@@ -568,7 +567,6 @@ if (import.meta.main) {
           sold_individually: true,
         }) as Promise<unknown>)
           .then((response: unknown) => {
-            console.debug(response);
             return z.object({ data: wooProductSchema })
               .parse(response).data;
           });

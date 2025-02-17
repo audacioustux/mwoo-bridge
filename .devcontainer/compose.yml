@@ -4,7 +4,6 @@ services:
     volumes:
       - ../..:/workspaces:cached,rw
       - docker-certs:/certs:ro
-      - nix-store:/nix/store
     cap_add:
       - SYS_PTRACE
     security_opt:
@@ -42,8 +41,6 @@ services:
 volumes:
   docker-certs:
   docker-storage:
-  nix-store:
-
 
 networks:
   devcontainer:

@@ -199,3 +199,22 @@ export const getCourseContentsSchema = z.array(z.object({
   uservisible: z.boolean(),
   modules: z.array(courseModuleSchema),
 }));
+
+export const getCategorySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  idnumber: z.string(),
+  description: z.string(),
+  descriptionformat: z.number(),
+  parent: z.number(),
+  sortorder: z.number(),
+  coursecount: z.number(),
+  visible: z.number(),
+  visibleold: z.number(),
+  timemodified: z.number(),
+  depth: z.number(),
+  path: z.string(),
+  theme: z.string(),
+});
+
+export const getCategoriesSchema = z.array(getCategorySchema);
