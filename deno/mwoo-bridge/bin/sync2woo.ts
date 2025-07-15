@@ -20,6 +20,7 @@ import {
 import { encodeHex } from "jsr:@std/encoding/hex";
 import slugify from "npm:slugify";
 import { from, mergeMap } from "rxjs";
+import { requireEnv } from "../utils/env.ts";
 
 const { warn } = console;
 
@@ -90,9 +91,9 @@ async function syncMedia(
   caption?: string,
   description?: string,
 ): Promise<{ id: number } | null> {
-  const apiUrl = Deno.env.get("WP_URL") + "/wp-json/wp/v2/media";
-  const username = Deno.env.get("WP_USERNAME");
-  const password = Deno.env.get("WP_PASSWORD");
+  const apiUrl = requireEnv("WP_URL") + "/wp-json/wp/v2/media";
+  const username = requireEnv("WP_USERNAME");
+  const password = requireEnv("WP_PASSWORD");
 
   const credentials = btoa(`${username}:${password}`);
 
@@ -222,7 +223,7 @@ if (import.meta.main) {
   ).then((courses) => courses.flat());
 
   processInParallel(
-    mooCourses,
+    mooCourses.slice(0, 1),
     1,
     async (course) => {
       const courseCid = toCourseCid(course.id);
@@ -268,21 +269,54 @@ if (import.meta.main) {
       }
 
       // ensure mandatory modules are present in Table of Contents section
+      // const tocSection = courseContents.find((c) =>
+      //   c.name === "Table of Contents"
+      // );
+      // const mandatoryTocModules = ["কোর্স ব্রেকডাউন"];
+      // if (tocSection) {
+      //   const missingModules = mandatoryTocModules.filter((module) =>
+      //     !tocSection.modules.some((m) => m.name === module)
+      //   );
+      //   if (missingModules.length) {
+      //     warn(
+      //       `Course ${courseCid}: missing modules in ${tocSection.name} section`,
+      //       missingModules,
+      //     );
+      //   }
+      // }
+
+      // ensure mandatory modules are present in Table of Contents section
       const tocSection = courseContents.find((c) =>
         c.name === "Table of Contents"
       );
-      const mandatoryTocModules = ["কোর্স ব্রেকডাউন"];
-      if (tocSection) {
-        const missingModules = mandatoryTocModules.filter((module) =>
-          !tocSection.modules.some((m) => m.name === module)
-        );
-        if (missingModules.length) {
-          warn(
-            `Course ${courseCid}: missing modules in ${tocSection.name} section`,
-            missingModules,
-          );
-        }
-      }
+      // console.log(courseContents);
+      // write to file for debugging
+      Deno.writeTextFile(
+        `./courses/${courseCid}.json`,
+        JSON.stringify(courseContents, null, 2),
+      );
+      const toc = tocSection?.modules.map(({ name, customdata }) => ({
+        name,
+        modules: courseContents.filter(({ id }) =>
+          id === parseInt(
+            JSON.parse(customdata)?.sectionid,
+            10,
+          )
+        ).map(({ modules }) => modules.map((m) => m.name)).flat(),
+      }));
+
+      // const mandatoryTocModules = ["কোর্স ব্রেকডাউন"];
+      // if (tocSection) {
+      //   const missingModules = mandatoryTocModules.filter((module) =>
+      //     !tocSection.modules.some((m) => m.name === module)
+      //   );
+      //   if (missingModules.length) {
+      //     warn(
+      //       `Course ${courseCid}: missing modules in ${tocSection.name} section`,
+      //       missingModules,
+      //     );
+      //   }
+      // }
 
       interface ListModule {
         name: string;
@@ -318,39 +352,40 @@ if (import.meta.main) {
       const introduction = introSection?.modules.map(toListModule)
         .filter(R.isNotNil);
 
-      const toTocModule = (module: z.infer<typeof moo.courseModuleSchema>) => {
-        const { name, description } = module;
-        if (!description) {
-          warn(`Course ${courseCid}: missing description in ${name}`);
-          return;
-        }
-        const dom = toDom(description);
-        // there should be a single div with no-overflow class
-        const noOverflowDiv = dom.querySelector("body > .no-overflow");
-        if (!noOverflowDiv) {
-          warn(`Course ${courseCid}: missing no-overflow div in Introduction`);
-          return;
-        }
+      // const toTocModule = (module: z.infer<typeof moo.courseModuleSchema>) => {
+      //   const { name, description } = module;
+      //   if (!description) {
+      //     warn(`Course ${courseCid}: missing description in ${name}`);
+      //     return;
+      //   }
+      //   const dom = toDom(description);
+      //   // there should be a single div with no-overflow class
+      //   const noOverflowDiv = dom.querySelector("body > .no-overflow");
+      //   if (!noOverflowDiv) {
+      //     warn(`Course ${courseCid}: missing no-overflow div in Introduction`);
+      //     return;
+      //   }
 
-        function buildOutline(
-          parent: Element,
-        ): CourseOutline[] | undefined {
-          const ul = parent.querySelector(":scope > ul");
-          if (!ul) return;
+      //   function buildOutline(
+      //     parent: Element,
+      //   ): CourseOutline[] | undefined {
+      //     const ul = parent.querySelector(":scope > ul");
+      //     if (!ul) return;
 
-          return Array.from(ul.children).map((li) => {
-            const title = li.querySelector(":scope > strong")?.innerText ||
-              getNodeTextContent(li);
-            const children = buildOutline(li);
-            return { title, children };
-          });
-        }
+      //     return Array.from(ul.children).map((li) => {
+      //       const title = li.querySelector(":scope > strong")?.innerText ||
+      //         getNodeTextContent(li);
+      //       const children = buildOutline(li);
+      //       return { title, children };
+      //     });
+      //   }
 
-        const outline = buildOutline(noOverflowDiv);
+      //   const outline = buildOutline(noOverflowDiv);
 
-        return { ...R.pick(["name"], module), outline };
-      };
-      const toc = tocSection?.modules.map(toTocModule).filter(R.isNotNil);
+      //   return { ...R.pick(["name"], module), outline };
+      // };
+      // console.debug(tocSection?.modules);
+      // const toc = tocSection?.modules.map(toTocModule).filter(R.isNotNil);
 
       const canonicalizedCourse = {
         id: course.id,
@@ -361,6 +396,7 @@ if (import.meta.main) {
         introduction,
         toc,
       };
+      // console.debug(`Course ${courseCid}:`, canonicalizedCourse);
 
       const product =
         await (woo.get("products", { sku: courseCid }) as Promise<unknown>)
@@ -466,32 +502,55 @@ if (import.meta.main) {
           : []
       ).flat();
 
-      const courseOutline = canonicalizedCourse.toc?.find(({ name }) =>
-        name === "কোর্স ব্রেকডাউন"
-      )?.outline ?? [];
-      const courseOutlineMetaFields = courseOutline.flatMap((module, index) => {
-        const buildUl = (ul: CourseOutline[]): string => {
-          return ul.map((li) =>
-            `<li>${li.title}${
-              li.children ? `<ul>${buildUl(li.children)}</ul>` : ""
-            }</li>`
-          ).join("");
-        };
-        const value = `<ul>${buildUl([module])}</ul>`;
-        return [
-          {
-            key: `course_ouline_${index}_module`,
-            value: module.title,
-          },
-          {
-            key: `course_ouline_${index}_lesson`,
-            value,
-          },
-        ];
-      }).concat({
+      // const courseOutline = canonicalizedCourse.toc?.find(({ name }) =>
+      //   name === "কোর্স ব্রেকডাউন"
+      // )?.outline ?? [];
+      // const courseOutlineMetaFields = courseOutline.flatMap((module, index) => {
+      //   const buildUl = (ul: CourseOutline[]): string => {
+      //     return ul.map((li) =>
+      //       `<li>${li.title}${
+      //         li.children ? `<ul>${buildUl(li.children)}</ul>` : ""
+      //       }</li>`
+      //     ).join("");
+      //   };
+      //   const value = `<ul>${buildUl([module])}</ul>`;
+      //   return [
+      //     {
+      //       key: `course_ouline_${index}_module`,
+      //       value: module.title,
+      //     },
+      //     {
+      //       key: `course_ouline_${index}_lesson`,
+      //       value,
+      //     },
+      //   ];
+      // }).concat({
+      //   key: "course_ouline",
+      //   value: courseOutline.length.toString(),
+      // });
+
+      const courseOutlineMetaFields = canonicalizedCourse.toc?.map(
+        ({ name, modules }, index) => {
+          const value = `<ul>${
+            modules.map((module) => `<li>${module}</li>`).join("")
+          }</ul>`;
+          return [
+            {
+              key: `course_ouline_${index}_module`,
+              value: name,
+            },
+            {
+              key: `course_ouline_${index}_lesson`,
+              value,
+            },
+          ];
+        },
+      ).flat().concat({
         key: "course_ouline",
-        value: courseOutline.length.toString(),
+        value: canonicalizedCourse.toc?.length.toString() || "0",
       });
+
+      // console.debug(courseOutlineMetaFields);
 
       const productFields: Partial<z.infer<typeof wooProductSchema>> = {
         name: canonicalizedCourse.name,
@@ -501,8 +560,9 @@ if (import.meta.main) {
         categories: [{ id: category.id }],
         meta_data: courseMetaFields
           .concat(courseIntroMetaFields)
-          .concat(courseOutlineMetaFields),
+          .concat(courseOutlineMetaFields || []),
       };
+      // console.debug(`Course ${courseCid}: product fields`, productFields);
       {
         // lint acf fields of type string
         const issues = await Promise.all(
