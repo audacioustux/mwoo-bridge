@@ -198,7 +198,7 @@ if (import.meta.main) {
   const mooCategoriesByIndex = R.indexBy(R.prop("id"), mooCategories);
 
   const mooFilteredCategories = mooCategoryTree
-    .filter((cat) => ["Live-Online", "On-Campus"].includes(cat.name))
+    // .filter((cat) => ["Live-Online", "On-Campus"].includes(cat.name))
     .map((cat) => {
       const getAllCategoryIds = (categories: moo.CategoryTree[]): number[] =>
         R.chain(
@@ -223,10 +223,13 @@ if (import.meta.main) {
   ).then((courses) => courses.flat());
 
   processInParallel(
-    mooCourses.slice(0, 1),
+    // mooCourses,
+    // mooCourses.slice(0, 100),
+    mooCourses.filter(({ id }) => id !== 173),
     1,
     async (course) => {
       const courseCid = toCourseCid(course.id);
+      console.info(`Syncing course ${courseCid}...`);
 
       const courseContents = await moo.api.core.course.getContents({
         courseid: course.id,
@@ -573,7 +576,11 @@ if (import.meta.main) {
             .map(async ({ key, value }) => {
               return {
                 key,
-                issues: await lintText(value, `${courseCid}.html`),
+                issues: await lintText(value, `${courseCid}.html`).catch(
+                  (error) => {
+                    return { messages: [{ message: error.message }] };
+                  },
+                ),
               };
             }) ?? [],
         );
