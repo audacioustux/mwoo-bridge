@@ -4,8 +4,8 @@ import * as moo from "../services/moo.ts";
 import { deepDiff } from "deepjol";
 import {
   DOMParser,
-  Element,
-  Node,
+  // Element,
+  // Node,
 } from "https://deno.land/x/deno_dom@v0.1.49/deno-dom-wasm.ts";
 import { lintText } from "../utils/index.ts";
 import {
@@ -44,11 +44,11 @@ function toDom(html: string) {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
-function getNodeTextContent(element: Element): string {
-  return Array.from(element.childNodes).filter(
-    (node) => node.nodeType === Node.TEXT_NODE,
-  ).map((node) => node.textContent).join("").trim();
-}
+// function getNodeTextContent(element: Element): string {
+//   return Array.from(element.childNodes).filter(
+//     (node) => node.nodeType === Node.TEXT_NODE,
+//   ).map((node) => node.textContent).join("").trim();
+// }
 
 async function syncTag(name: string, slug: string, description: string) {
   const existingTag = await (woo
